@@ -1,0 +1,23 @@
+{
+  "name": "xresource",
+  "version": "0.0.1-alpha.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "test": "jest --config jest.config.js"
+  },
+  "devDependencies": {
+    "@types/jest": "^23.3.12",
+    "@types/react": "^16.7.18",
+    "@types/react-dom": "^16.0.11",
+    "add": "^2.0.6",
+    "jest": "^23.6.0",
+    "jest-dom": "^3.0.0",
+    "react": "^16.8.0-alpha.0",
+    "react-dom": "^16.8.0-alpha.0",
+    "react-testing-library": "^5.4.4",
+    "ts-jest": "^23.10.5",
+    "typescript": "^3.2.2",
+    "yarn": "^1.13.0"
+  }
+}
