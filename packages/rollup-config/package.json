@@ -22,5 +22,8 @@
     "log-update": "^2.3.0",
     "rollup": "^1.0.1",
     "rollup-plugin-babel": "^4.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

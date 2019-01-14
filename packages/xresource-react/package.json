@@ -21,8 +21,8 @@
     "tslint": "tslint --project ."
   },
   "dependencies": {
-    "xresource": "^0.0.1-alpha.0",
-    "react": "^16.8.0-alpha.0"
+    "react": "^16.8.0-alpha.0",
+    "xresource": "^0.0.1-alpha.0"
   },
   "peerDependencies": {
     "react": "^16.8.0-alpha.0"

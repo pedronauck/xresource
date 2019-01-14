@@ -26,5 +26,8 @@
   },
   "devDependencies": {
     "@types/memoize-one": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
