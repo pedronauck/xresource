@@ -19,5 +19,12 @@
     "fix:prettier": "prettier \"src/**/*.{ts,tsx,md,mdx,js,jsx,json}\" --write",
     "fix:tslint": "tslint --fix --project .",
     "tslint": "tslint --project ."
+  },
+  "dependencies": {
+    "fast-deep-equal": "^2.0.1",
+    "memoize-one": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/memoize-one": "^4.1.0"
   }
 }

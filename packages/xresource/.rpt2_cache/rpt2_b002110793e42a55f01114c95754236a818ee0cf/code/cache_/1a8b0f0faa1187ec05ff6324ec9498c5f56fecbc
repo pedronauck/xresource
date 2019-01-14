@@ -1,1 +1,0 @@
-{"code":"export const createResource = () => {\r\n    return null;\r\n};\r\n","dts":{"name":"/Volumes/Projects/dev/personal/xresource/packages/xresource/index.d.ts","writeByteOrderMark":false,"text":"export declare const createResource: () => null;\r\n"}}
