@@ -1,4 +1,4 @@
-import { createResource } from '../'
+import { createResource } from 'xresource'
 
 interface Context {
   foo: string
@@ -14,7 +14,10 @@ export default createResource<Context, Data>({
   },
   data: {
     bar: {
-      source: ctx => Promise.resolve('bar'),
+      source: async () =>
+        new Promise(resolve => {
+          setTimeout(() => resolve('bar'), 2000)
+        }),
       modifiers: [(ctx, bar) => ctx.foo + bar],
     },
   },

@@ -18,10 +18,10 @@ export type PureEffects = Record<
 >
 
 export type SourceFn<C, D, T = any> = (
-  data: Partial<D>,
-  ctx: C
+  ctx: C,
+  data: Partial<D>
 ) => Promise<T> | T
-export type Modifier<C = any, T = any> = (current: T, context: C) => T
+export type Modifier<C = any, T = any> = (context: C, current: T) => T
 
 export type DataItem<C = any, D = any> =
   | {
@@ -33,8 +33,8 @@ export type DataItem<C = any, D = any> =
 export type DataDescriptor<C, D> = Record<string, DataItem<C, D>>
 export type ErrorMap<D> = Record<keyof D, Error>
 
-export type StartListener<C, D> = (data: D, ctx: C) => void
-export type DoneListener<C, D> = (data: D, ctx: C, error: ErrorMap<D>) => void
+export type StartListener<C, D> = (ctx: C, data: D) => void
+export type DoneListener<C, D> = (ctx: C, data: D, error: ErrorMap<D>) => void
 export type ContextChangeListener<C> = (ctx: C) => void
 
 export interface UpdateOpts {
@@ -57,9 +57,9 @@ export interface Resource<C, D> {
   reset(): Promise<void>
   send(type: string, payload?: any): void
   setContext(next: Updater<C> | Partial<C>): void
-  onUpdateStart(listener: StartListener<C, D>): void
-  onUpdateDone(listener: DoneListener<C, D>): void
-  onContextChange(listener: ContextChangeListener<C>): void
+  onUpdateStart(listener: StartListener<C, D>): () => void
+  onUpdateDone(listener: DoneListener<C, D>): () => void
+  onContextChange(listener: ContextChangeListener<C>): () => void
 }
 
 function get<T>(obj: any, key: string): T {
@@ -85,7 +85,7 @@ function reduceEffects<C, D>(
 const modify = memoize(
   (modifiers: Modifier[], ctx: any, result: any) =>
     Array.isArray(modifiers)
-      ? modifiers.reduce((obj, modifier) => modifier(obj, ctx), result)
+      ? modifiers.reduce((obj, modifier) => modifier(ctx, obj), result)
       : result,
   deepEqual
 )
@@ -152,7 +152,7 @@ function createInstance<C = any, D = any>({
       try {
         if (entry && entry.source) {
           const { source, modifiers } = entry
-          const pureData = await source(mapToObject(dataMap) as D, ctxValue)
+          const pureData = await source(ctxValue, mapToObject(dataMap) as D)
           const data = modify(modifiers, ctxValue, pureData)
 
           dataMap.set(key, data)
@@ -160,7 +160,7 @@ function createInstance<C = any, D = any>({
           memory.set('isDataLoaded', true)
         }
         if (typeof entry === 'function') {
-          const result = await entry(mapToObject(dataMap) as D, ctxValue)
+          const result = await entry(ctxValue, mapToObject(dataMap) as D)
           dataMap.set(key, result)
           pureDataMap.set(key, result)
           memory.set('isDataLoaded', true)
@@ -237,14 +237,17 @@ function createInstance<C = any, D = any>({
 
     onUpdateStart: (listener: StartListener<C, D>) => {
       startListeners.add(listener)
+      return () => startListeners.delete(listener)
     },
 
     onUpdateDone: (listener: DoneListener<C, D>) => {
       doneListeners.add(listener)
+      return () => doneListeners.delete(listener)
     },
 
     onContextChange: (listener: ContextChangeListener<C>) => {
       contextListeners.add(listener)
+      return () => contextListeners.delete(listener)
     },
   }
 
