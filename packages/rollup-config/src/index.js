@@ -7,9 +7,6 @@ const isProd = process.env.NODE_ENV === 'production'
 const sizePlugin = require('./plugins/size')
 const copyPlugin = require('./plugins/copy')
 
-const defaultExternal = id =>
-  !id.startsWith('\0') && !id.startsWith('.') && !id.startsWith('/')
-
 const defaultPlugins = outputDir => [
   babel({
     exclude: 'node_modules/**',
@@ -32,7 +29,6 @@ const defaultPlugins = outputDir => [
 
 const output = (format, outputDir, { plugins = [], external, ...opts }) => ({
   ...opts,
-  external: external || defaultExternal,
   output: {
     format,
     dir: outputDir,
