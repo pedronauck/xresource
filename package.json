@@ -46,6 +46,7 @@
     "typescript": "^3.2.2"
   },
   "workspaces": [
+    "examples/*",
     "packages/*"
   ],
   "commitlint": {
