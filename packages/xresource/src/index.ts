@@ -131,8 +131,10 @@ function createInstance<C = any, D = any>({
    * but won't read when call setContext() or send()
    */
   const updateAsync = async () => {
+    if (!dataDescriptor) return
+
     const ctxValue = context$.value
-    const entries = Object.entries(dataDescriptor)
+    const entries = Object.entries(dataDescriptor || {})
     const dataMap = new Map<string, any>(entries)
     const pureDataMap = new Map<string, any>(entries)
     const errorMap = new Map<string, any>()
@@ -172,7 +174,7 @@ function createInstance<C = any, D = any>({
    */
   const updateJustModifiers = () => {
     const ctxValue = context$.value
-    const entries = Object.entries(dataDescriptor)
+    const entries = Object.entries(dataDescriptor || {})
     const dataMap = new Map<string, any>(entries)
 
     for (const [key, entry] of dataMap) {
