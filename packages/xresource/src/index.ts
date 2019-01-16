@@ -1,3 +1,4 @@
+import { BehaviorSubject } from 'rxjs'
 import deepEqual from 'fast-deep-equal'
 import memoize from 'memoize-one'
 
@@ -33,9 +34,9 @@ export type DataItem<C = any, D = any> =
 export type DataDescriptor<C, D> = Record<string, DataItem<C, D>>
 export type ErrorMap<D> = Record<keyof D, Error>
 
-export type StartListener<C, D> = (ctx: C, data: D) => void
-export type DoneListener<C, D> = (ctx: C, data: D, error: ErrorMap<D>) => void
-export type ContextChangeListener<C> = (ctx: C) => void
+export type StartListener = () => void
+export type DoneListener<D> = (data: D, error: ErrorMap<D>) => void
+export type ContextListener<C> = (ctx: C) => void
 
 export interface UpdateOpts {
   async?: boolean
@@ -50,27 +51,28 @@ export interface ResourceFactory<C, D> {
 
 export interface Resource<C, D> {
   effects: PureEffects
-  getContext(): C
-  getData(): D
-  getError(): ErrorMap<D>
+  context$: BehaviorSubject<C>
+  data$: BehaviorSubject<D>
+  error$: BehaviorSubject<ErrorMap<D>>
   update(): Promise<void>
   reset(): Promise<void>
   send(type: string, payload?: any): void
   setContext(next: Updater<C> | Partial<C>): void
-  onUpdateStart(listener: StartListener<C, D>): () => void
-  onUpdateDone(listener: DoneListener<C, D>): () => void
-  onContextChange(listener: ContextChangeListener<C>): () => void
+  onContextChange(listener: ContextListener<C>): () => void
+  onUpdateStart(listener: StartListener): () => void
+  onUpdateDone(listener: DoneListener<D>): () => void
 }
 
 function get<T>(obj: any, key: string): T {
   return obj[key]
 }
 
-const mapToObject = (map: Map<string, any>) =>
-  Array.from(map.entries()).reduce(
+function mapToObject<T>(map: Map<string, any>): T {
+  return Array.from(map.entries()).reduce(
     (obj, [key, val]) => ({ ...obj, [key]: val }),
-    {}
+    {} as T
   )
+}
 
 function reduceEffects<C, D>(
   effects: Effects<C, D>,
@@ -90,23 +92,19 @@ const modify = memoize(
   deepEqual
 )
 
-const runListeners = (listeners: Set<any>, getArgs: () => any[]) => () => {
-  const args = getArgs()
-  for (const listener of listeners) {
-    listener(...args)
-  }
-}
-
 function createInstance<C = any, D = any>({
   mutations,
   data: dataDescriptor,
   context: initialContext,
   effects: defaultEffects = {},
 }: ResourceFactory<C, D>): Resource<C, D> {
-  const memory = new Map()
+  const data$ = new BehaviorSubject<D>({} as D)
+  const context$ = new BehaviorSubject<C>({} as C)
+  const pureData$ = new BehaviorSubject<D>({} as D)
+  const error$ = new BehaviorSubject<ErrorMap<D>>({} as ErrorMap<D>)
+
   const startListeners = new Set()
   const doneListeners = new Set()
-  const contextListeners = new Set()
 
   const effects = reduceEffects<C, D>(
     defaultEffects,
@@ -114,34 +112,26 @@ function createInstance<C = any, D = any>({
   )
 
   const initialMemory = () => {
-    memory.set('isDataLoaded', false)
-    memory.set('context', initialContext || {})
-    memory.set('pureData', {})
-    memory.set('data', {})
-    memory.set('error', {})
+    context$.next(initialContext || ({} as C))
+    pureData$.next({} as D)
+    data$.next({} as D)
+    error$.next({} as ErrorMap<D>)
   }
 
-  const runStartListeners = runListeners(startListeners, () => [
-    memory.get('context'),
-    memory.get('data'),
-  ])
+  const runStartListeners = () => {
+    startListeners.forEach(listener => listener())
+  }
 
-  const runDoneListeners = runListeners(doneListeners, () => [
-    memory.get('context'),
-    memory.get('data'),
-    memory.get('error'),
-  ])
-
-  const runContextListeners = runListeners(contextListeners, () => [
-    memory.get('context'),
-  ])
+  const runDoneListeners = () => {
+    doneListeners.forEach(listener => listener(data$.value, error$.value))
+  }
 
   /**
    * this function will run after each async update()
    * but won't read when call setContext() or send()
    */
   const updateAsync = async () => {
-    const ctxValue = memory.get('context')
+    const ctxValue = context$.value
     const entries = Object.entries(dataDescriptor)
     const dataMap = new Map<string, any>(entries)
     const pureDataMap = new Map<string, any>(entries)
@@ -157,13 +147,11 @@ function createInstance<C = any, D = any>({
 
           dataMap.set(key, data)
           pureDataMap.set(key, pureData)
-          memory.set('isDataLoaded', true)
         }
         if (typeof entry === 'function') {
           const result = await entry(ctxValue, mapToObject(dataMap) as D)
           dataMap.set(key, result)
           pureDataMap.set(key, result)
-          memory.set('isDataLoaded', true)
         }
       } catch (err) {
         dataMap.set(key, null)
@@ -172,9 +160,9 @@ function createInstance<C = any, D = any>({
       }
     }
 
-    memory.set('data', mapToObject(dataMap))
-    memory.set('pureData', mapToObject(pureDataMap))
-    memory.set('error', mapToObject(errorMap))
+    pureData$.next(mapToObject<D>(pureDataMap))
+    data$.next(mapToObject<D>(dataMap))
+    error$.next(mapToObject<ErrorMap<D>>(errorMap))
     runDoneListeners()
   }
 
@@ -183,71 +171,68 @@ function createInstance<C = any, D = any>({
    * it will just get pureData and apply midifiers using new context value
    */
   const updateJustModifiers = () => {
-    if (!memory.get('isDataLoaded')) return
-
-    const ctxValue = memory.get('context')
-    const pureDataValue = memory.get('pureData')
+    const ctxValue = context$.value
     const entries = Object.entries(dataDescriptor)
     const dataMap = new Map<string, any>(entries)
 
     for (const [key, entry] of dataMap) {
       if (entry && Array.isArray(entry.modifiers)) {
-        const pureData = get(pureDataValue, key)
-        const data = modify(entry.modifiers, ctxValue, pureData)
+        const pureData = get(pureData$.value, key)
+        const data = pureData && modify(entry.modifiers, ctxValue, pureData)
         dataMap.set(key, data)
       }
     }
 
-    memory.set('data', mapToObject(dataMap))
+    data$.next(mapToObject(dataMap))
+    runDoneListeners()
   }
 
   const resource: Resource<C, D> = {
     effects,
+    context$,
+    data$,
+    error$,
+
     update: updateAsync,
-
-    getContext: () => memory.get('context'),
-    getData: () => memory.get('data'),
-    getError: () => memory.get('error'),
-
-    send(type, payload): void {
-      if (mutations && Object.keys(mutations).length > 0) {
-        const mutation = mutations[type]
-        const context = memory.get('context')
-
-        if (mutation && typeof mutation === 'function') {
-          memory.set('context', mutation(context, payload))
-          runContextListeners()
-          updateJustModifiers()
-        }
-      }
-    },
-
-    setContext(value): void {
-      const context = memory.get('context')
-      const nextValue = value instanceof Function ? value(context) : value
-      memory.set('context', nextValue)
-      runContextListeners()
-      updateJustModifiers()
-    },
 
     async reset(): Promise<void> {
       initialMemory()
       await resource.update()
     },
 
-    onUpdateStart: (listener: StartListener<C, D>) => {
+    onContextChange(listener: ContextListener<C>): () => void {
+      context$.subscribe(listener)
+      return () => context$.unsubscribe()
+    },
+
+    onUpdateStart(listener: StartListener): () => void {
       startListeners.add(listener)
       return () => startListeners.delete(listener)
     },
 
-    onUpdateDone: (listener: DoneListener<C, D>) => {
+    onUpdateDone(listener: DoneListener<D>): () => void {
       doneListeners.add(listener)
       return () => doneListeners.delete(listener)
     },
 
-    onContextChange: (listener: ContextChangeListener<C>) => {
-      contextListeners.add(listener)
-      return () => contextListeners.delete(listener)
+    send(type, payload): void {
+      if (mutations && Object.keys(mutations).length > 0) {
+        const mutation = mutations[type]
+
+        if (mutation && typeof mutation === 'function') {
+          context$.next(mutation(context$.value, payload) as C)
+          updateJustModifiers()
+        }
+      }
+    },
+
+    setContext(value): void {
+      const context = context$.value
+      const nextValue =
+        value instanceof Function ? value(context) : { ...context, ...value }
+
+      context$.next(nextValue)
+      updateJustModifiers()
     },
   }
 

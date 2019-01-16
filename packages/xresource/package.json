@@ -13,7 +13,7 @@
   "scripts": {
     "test": "cross-env NODE_ENV=test jest",
     "test:watch": "yarn test --watchAll",
-    "dev": "cross-env NODE_ENV=development yarn build -w",
+    "dev": "cross-env NODE_ENV=development rollup -c -w",
     "build": "cross-env NODE_ENV=production rollup -c",
     "fix": "run-s fix:*",
     "fix:prettier": "prettier \"src/**/*.{ts,tsx,md,mdx,js,jsx,json}\" --write",
@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "fast-deep-equal": "^2.0.1",
-    "memoize-one": "^5.0.0"
+    "memoize-one": "^5.0.0",
+    "rxjs": "^6.3.3"
   },
   "devDependencies": {
     "@types/memoize-one": "^4.1.0"

@@ -1,14 +1,13 @@
 import { createResource } from './'
-
 import basicResource from './fixtures/basic-resource'
 
 describe('context', () => {
   test('basic context', async () => {
     const instance = basicResource.read()
 
-    expect(instance.getContext()).toEqual({ foo: 'foo' })
+    expect(instance.context$.value).toEqual({ foo: 'foo' })
     instance.setContext({ foo: 'bar' })
-    expect(instance.getContext()).toEqual({ foo: 'bar' })
+    expect(instance.context$.value).toEqual({ foo: 'bar' })
   })
 
   test('using multiple instance', async () => {
@@ -18,15 +17,15 @@ describe('context', () => {
     instanceX.setContext({ foo: 'bar' })
     instanceY.setContext({ foo: 'baz' })
 
-    expect(instanceX.getContext()).toEqual({ foo: 'bar' })
-    expect(instanceY.getContext()).toEqual({ foo: 'baz' })
+    expect(instanceX.context$.value).toEqual({ foo: 'bar' })
+    expect(instanceY.context$.value).toEqual({ foo: 'baz' })
   })
 
   test('update context using function', async () => {
     const instance = basicResource.read()
 
     instance.setContext(prev => ({ foo: prev.foo + 'bar' }))
-    expect(instance.getContext()).toEqual({ foo: 'foobar' })
+    expect(instance.context$.value).toEqual({ foo: 'foobar' })
   })
 
   test('update context using mutation', async () => {
@@ -36,7 +35,7 @@ describe('context', () => {
     instance.send('SET_FOO', 'baz')
     instance.send('SET_FOO', 'foo')
 
-    expect(instance.getContext()).toEqual({ foo: 'foo' })
+    expect(instance.context$.value).toEqual({ foo: 'foo' })
   })
 
   test('update context inside effect', async () => {
@@ -44,7 +43,7 @@ describe('context', () => {
     instance.effects.changeFoo('bar')
     instance.effects.changeFoo('foo')
 
-    expect(instance.getContext()).toEqual({ foo: 'foo' })
+    expect(instance.context$.value).toEqual({ foo: 'foo' })
   })
 })
 
@@ -53,10 +52,10 @@ describe('data', () => {
     const instance = basicResource.read()
 
     instance.setContext({ foo: 'bar' })
-    expect(instance.getData()).toEqual({})
+    expect(instance.data$.value).toEqual({})
 
     await instance.update()
-    expect(instance.getData()).toEqual({
+    expect(instance.data$.value).toEqual({
       bar: 'barbar',
     })
   })
@@ -65,12 +64,12 @@ describe('data', () => {
     const instance = basicResource.read()
 
     await instance.update()
-    expect(instance.getData()).toEqual({
+    expect(instance.data$.value).toEqual({
       bar: 'foobar',
     })
 
     instance.setContext({ foo: 'bar' })
-    expect(instance.getData()).toEqual({
+    expect(instance.data$.value).toEqual({
       bar: 'barbar',
     })
   })
@@ -86,8 +85,8 @@ describe('data', () => {
 
     const instance = resource.read()
     await instance.update()
-    expect(instance.getError().bar).toBeInstanceOf(Error)
-    expect(instance.getData().bar).toBeNull()
+    expect(instance.error$.value.bar).toBeInstanceOf(Error)
+    expect(instance.data$.value.bar).toBeNull()
   })
 
   test('reset all to initial', async () => {
@@ -95,24 +94,24 @@ describe('data', () => {
 
     instance.setContext({ foo: 'bar' })
     await instance.update()
-    expect(instance.getData()).toEqual({
+    expect(instance.data$.value).toEqual({
       bar: 'barbar',
     })
 
     await instance.reset()
-    expect(instance.getContext()).toEqual({ foo: 'foo' })
-    expect(instance.getData()).toEqual({
+    expect(instance.context$.value).toEqual({ foo: 'foo' })
+    expect(instance.data$.value).toEqual({
       bar: 'foobar',
     })
   })
 
   test('resource listeners', async () => {
     const instance = basicResource.read()
-    const contextFn = jest.fn(() => null)
+    const ctxChangeFn = jest.fn(() => null)
     const startFn = jest.fn(() => null)
     const doneFn = jest.fn(() => null)
 
-    instance.onContextChange(contextFn)
+    instance.onContextChange(ctxChangeFn)
     instance.onUpdateStart(startFn)
     instance.onUpdateDone(doneFn)
     instance.setContext({ foo: 'bar' })
@@ -120,12 +119,14 @@ describe('data', () => {
 
     await instance.update()
 
-    expect(contextFn).toBeCalled()
-    expect(contextFn).toBeCalledTimes(2)
-    expect(contextFn).toBeCalledWith({ foo: 'foo' })
+    expect(ctxChangeFn).toBeCalled()
+    expect(ctxChangeFn).toBeCalledTimes(3)
+    expect(ctxChangeFn).toBeCalledWith({ foo: 'foo' })
     expect(startFn).toBeCalled()
-    expect(startFn).toBeCalledWith({ foo: 'foo' }, {})
+    expect(startFn).toBeCalledTimes(1)
+    expect(startFn).toBeCalledWith()
     expect(doneFn).toBeCalled()
-    expect(doneFn).toBeCalledWith({ foo: 'foo' }, { bar: 'foobar' }, {})
+    expect(doneFn).toBeCalledTimes(3)
+    expect(doneFn).toBeCalledWith({ bar: 'foobar' }, {})
   })
 })
