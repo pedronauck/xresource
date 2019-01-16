@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Resource, ErrorMap, ResourceInstance } from 'xresource'
 
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>
@@ -27,7 +27,7 @@ export function useResource<C = any, D = any>(
   instance: ResourceInstance<C, D>,
   opts: Opts = { updateOnRead: true }
 ): UseResource<C, D> {
-  const resource = instance.read()
+  const resource = useMemo(() => instance.read(), [])
   const {
     effects,
     context$,

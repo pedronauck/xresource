@@ -1,12 +1,12 @@
 import * as React from 'react'
 import { render, waitForElement, fireEvent } from 'react-testing-library'
 
-import basicResource from './fixtures/basic-resource'
+import BasicResource from './fixtures/basic-resource'
 import { useResource } from './'
 
 it('using a basic resource', async () => {
   const Foo = () => {
-    const { ctx, data } = useResource(basicResource)
+    const { ctx, data } = useResource(BasicResource)
     return <div>{ctx.foo + data.bar}</div>
   }
 
@@ -16,7 +16,7 @@ it('using a basic resource', async () => {
 
 it('without update on read', async () => {
   const Foo = () => {
-    const { ctx, data } = useResource(basicResource, {
+    const { ctx, data } = useResource(BasicResource, {
       updateOnRead: false,
     })
 
@@ -29,9 +29,7 @@ it('without update on read', async () => {
 
 test('changing context on click', async () => {
   const Foo = () => {
-    const { ctx, setContext } = useResource(basicResource, {
-      updateOnRead: false,
-    })
+    const { ctx, setContext } = useResource(BasicResource)
 
     return (
       <React.Fragment>
@@ -45,7 +43,6 @@ test('changing context on click', async () => {
 
   const { getByTestId, rerender } = render(<Foo />)
   expect(getByTestId('text').textContent).toBe('foo')
-
   fireEvent.click(getByTestId('button'))
   rerender(<Foo />)
   expect(getByTestId('text').textContent).toBe('bar')
