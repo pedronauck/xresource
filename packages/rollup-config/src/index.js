@@ -27,7 +27,7 @@ const defaultPlugins = outputDir => [
   sizePlugin(outputDir),
 ]
 
-const output = (format, outputDir, { plugins = [], external, ...opts }) => ({
+const output = (format, outputDir, { plugins = [], ...opts }) => ({
   ...opts,
   output: {
     format,
