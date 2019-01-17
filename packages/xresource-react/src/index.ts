@@ -12,63 +12,48 @@ export interface UseResource<C, D> extends Omit<Resource<C, D>, OmitProps> {
   [key: string]: any
 }
 
-export interface Opts {
+export interface UseResourceOpts {
   updateOnRead?: boolean
-}
-
-export interface State<C, D> {
-  ctx: C
-  data: D
-  error: ErrorMap<D>
-  loading: boolean
 }
 
 export function useResource<C = any, D = any>(
   instance: ResourceInstance<C, D>,
-  opts: Opts = { updateOnRead: true }
+  opts: UseResourceOpts = { updateOnRead: true }
 ): UseResource<C, D> {
-  const resource = useMemo(() => instance.read(), [])
+  const resource = useMemo(() => instance.read().start(), [])
+
   const {
     effects,
     context$,
     data$,
     error$,
-    onContextChange,
     onUpdateDone,
     onUpdateStart,
   } = resource
 
-  const [state, setState] = useState<State<C, D>>({
-    ctx: context$.value,
-    data: data$.value,
-    error: error$.value,
-    loading: false,
-  })
+  const [ctx, setCtx] = useState(context$.value)
+  const [data, setData] = useState(data$.value)
+  const [error, setError] = useState(error$.value)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const onCtxSub = onContextChange(ctx => {
-      setState(s => ({ ...s, ctx }))
-    })
-
-    const onStartSub = onUpdateStart(() =>
-      setState(s => ({ ...s, loading: true }))
-    )
-
-    const onDoneSub = onUpdateDone((data, error) => {
-      setState(s => ({ ...s, data, error }))
-    })
-
+    context$.subscribe(setCtx)
+    data$.subscribe(setData)
+    error$.subscribe(setError)
+    onUpdateStart(() => setLoading(true))
+    onUpdateDone(() => setLoading(false))
     opts.updateOnRead && resource.update()
     return () => {
-      onCtxSub()
-      onStartSub()
-      onDoneSub()
+      resource.stop()
     }
   }, [])
 
   return {
     ...resource,
     ...effects,
-    ...state,
+    ctx,
+    data,
+    loading,
+    error,
   }
 }

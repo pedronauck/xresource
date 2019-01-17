@@ -6,8 +6,10 @@ import { useResource } from './'
 
 it('using a basic resource', async () => {
   const Foo = () => {
-    const { ctx, data } = useResource(BasicResource)
-    return <div>{ctx.foo + data.bar}</div>
+    const { ctx, data, loading } = useResource(BasicResource)
+
+    if (loading) return <div data-testid="foo">loading</div>
+    return <div data-testid="foo">{`${ctx.foo}${data.bar}`}</div>
   }
 
   const { getByText } = render(<Foo />)
