@@ -14,7 +14,7 @@ export default createResource<Context, Data>({
   },
   data: {
     bar: {
-      source: ctx => Promise.resolve('bar'),
+      source: () => Promise.resolve('bar'),
       modifiers: [(ctx, bar) => ctx.foo + bar],
     },
   },

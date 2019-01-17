@@ -42,11 +42,20 @@ export interface UpdateOpts {
   async?: boolean
 }
 
-export interface ResourceFactory<C, D> {
+export interface Factory<C, D> {
   context?: C
   data: DataDescriptor<C, D>
   mutations?: Mutations<C>
   effects?: Effects<C, D>
+}
+
+export type FactoryFn<C, D> = (...args: any[]) => Factory<C, D>
+export type ResourceFactory<C, D> = Factory<C, D> | FactoryFn<C, D>
+
+export interface Memory<C, D> {
+  startListeners: Set<StartListener>
+  doneListeners: Set<DoneListener<D>>
+  isStarted: boolean
 }
 
 export interface Resource<C, D> {
@@ -54,11 +63,15 @@ export interface Resource<C, D> {
   context$: BehaviorSubject<C>
   data$: BehaviorSubject<D>
   error$: BehaviorSubject<ErrorMap<D>>
+  getContext(): C
+  getData(): D
+  getError(): ErrorMap<D>
+  start(): Resource<C, D>
+  stop(): Resource<C, D>
   update(): Promise<void>
   reset(): Promise<void>
   send(type: string, payload?: any): void
   setContext(next: Updater<C> | Partial<C>): void
-  onContextChange(listener: ContextListener<C>): () => void
   onUpdateStart(listener: StartListener): () => void
   onUpdateDone(listener: DoneListener<D>): () => void
 }
@@ -97,33 +110,49 @@ function createInstance<C = any, D = any>({
   data: dataDescriptor,
   context: initialContext,
   effects: defaultEffects = {},
-}: ResourceFactory<C, D>): Resource<C, D> {
+}: Factory<C, D>): Resource<C, D> {
   const data$ = new BehaviorSubject<D>({} as D)
   const context$ = new BehaviorSubject<C>({} as C)
   const pureData$ = new BehaviorSubject<D>({} as D)
   const error$ = new BehaviorSubject<ErrorMap<D>>({} as ErrorMap<D>)
+  const memory$ = new BehaviorSubject<Memory<C, D>>({
+    startListeners: new Set(),
+    doneListeners: new Set(),
+    isStarted: false,
+  })
 
-  const startListeners = new Set()
-  const doneListeners = new Set()
+  const throwWithStarted = () => {
+    if (!memory$.value.isStarted) {
+      throw new Error('You need to start your resource before go')
+    }
+  }
 
-  const effects = reduceEffects<C, D>(
-    defaultEffects,
-    effect => (...args: any[]) => effect(resource, ...args)
-  )
+  const setInitial = () => {
+    const actualMemory = memory$.value
 
-  const initialMemory = () => {
+    memory$.next({ ...actualMemory, isStarted: true })
     context$.next(initialContext || ({} as C))
     pureData$.next({} as D)
     data$.next({} as D)
     error$.next({} as ErrorMap<D>)
+    actualMemory.startListeners.clear()
+    actualMemory.doneListeners.clear()
   }
 
   const runStartListeners = () => {
-    startListeners.forEach(listener => listener())
+    const listeners = memory$.value.startListeners
+    listeners.forEach(listener => listener())
   }
 
   const runDoneListeners = () => {
-    doneListeners.forEach(listener => listener(data$.value, error$.value))
+    const listeners = memory$.value.doneListeners
+    listeners.forEach(listener => listener(data$.value, error$.value))
+  }
+
+  function updateSubject<T>(subject: BehaviorSubject<T>, next: T): boolean {
+    const isEqual = deepEqual(subject.value, next)
+    if (!isEqual) subject.next(next)
+    return isEqual
   }
 
   /**
@@ -162,10 +191,13 @@ function createInstance<C = any, D = any>({
       }
     }
 
-    pureData$.next(mapToObject<D>(pureDataMap))
-    data$.next(mapToObject<D>(dataMap))
-    error$.next(mapToObject<ErrorMap<D>>(errorMap))
-    runDoneListeners()
+    updateSubject<D>(pureData$, mapToObject(pureDataMap))
+    const dataEqual = updateSubject<D>(data$, mapToObject(dataMap))
+    const errorEqual = updateSubject<ErrorMap<D>>(error$, mapToObject(errorMap))
+
+    if (!dataEqual || !errorEqual) {
+      runDoneListeners()
+    }
   }
 
   /**
@@ -185,65 +217,103 @@ function createInstance<C = any, D = any>({
       }
     }
 
-    data$.next(mapToObject(dataMap))
+    updateSubject<D>(data$, mapToObject(dataMap))
     runDoneListeners()
   }
 
+  const effects = reduceEffects<C, D>(
+    defaultEffects,
+    effect => (...args: any[]) => effect(resource, ...args)
+  )
+
   const resource: Resource<C, D> = {
-    effects,
     context$,
     data$,
     error$,
+    effects,
 
-    update: updateAsync,
+    getContext(): C {
+      return context$.value
+    },
+
+    getData(): D {
+      return data$.value
+    },
+
+    getError(): ErrorMap<D> {
+      return error$.value
+    },
+
+    start(): Resource<C, D> {
+      if (memory$.value.isStarted) return resource
+      setInitial()
+      return resource
+    },
+
+    stop(): Resource<C, D> {
+      const memory = memory$.value
+      context$.unsubscribe()
+      data$.unsubscribe()
+      error$.unsubscribe()
+      memory.startListeners.clear()
+      memory.doneListeners.clear()
+      return resource
+    },
+
+    async update(): Promise<void> {
+      throwWithStarted()
+      await updateAsync()
+    },
 
     async reset(): Promise<void> {
-      initialMemory()
-      await resource.update()
-    },
-
-    onContextChange(listener: ContextListener<C>): () => void {
-      context$.subscribe(listener)
-      return () => context$.unsubscribe()
-    },
-
-    onUpdateStart(listener: StartListener): () => void {
-      startListeners.add(listener)
-      return () => startListeners.delete(listener)
-    },
-
-    onUpdateDone(listener: DoneListener<D>): () => void {
-      doneListeners.add(listener)
-      return () => doneListeners.delete(listener)
+      setInitial()
+      await updateAsync()
     },
 
     send(type, payload): void {
+      throwWithStarted()
       if (mutations && Object.keys(mutations).length > 0) {
         const mutation = mutations[type]
 
         if (mutation && typeof mutation === 'function') {
-          context$.next(mutation(context$.value, payload) as C)
-          updateJustModifiers()
+          const next = mutation(context$.value, payload) as C
+          const equal = updateSubject<C>(context$, next)
+          !equal && updateJustModifiers()
         }
       }
     },
 
     setContext(value): void {
+      throwWithStarted()
       const context = context$.value
-      const nextValue =
-        value instanceof Function ? value(context) : { ...context, ...value }
+      const next =
+        typeof value === 'function' ? value(context) : { ...context, ...value }
 
-      context$.next(nextValue)
-      updateJustModifiers()
+      const equal = updateSubject<C>(context$, next)
+      !equal && updateJustModifiers()
+    },
+
+    onUpdateStart(listener: StartListener): () => void {
+      throwWithStarted()
+      const { startListeners } = memory$.value
+      startListeners.add(listener)
+      return () => startListeners.delete(listener)
+    },
+
+    onUpdateDone(listener: DoneListener<D>): () => void {
+      throwWithStarted()
+      const { doneListeners } = memory$.value
+      doneListeners.add(listener)
+      return () => doneListeners.delete(listener)
     },
   }
 
-  initialMemory()
   return resource
 }
 
 export interface ResourceInstance<C, D> {
   read: () => Resource<C, D>
+  with: (...args: any[]) => ResourceInstance<C, D>
 }
 
 export type DefaultContext = Record<string, any>
@@ -252,7 +322,19 @@ export type DefaultData = Record<string, any>
 export function createResource<C = DefaultContext, D = DefaultData>(
   factory: ResourceFactory<C, D>
 ): ResourceInstance<C, D> {
-  return {
-    read: () => createInstance(factory),
+  const args$ = new BehaviorSubject<any>([])
+
+  const instance = {
+    read(): Resource<C, D> {
+      const resource =
+        typeof factory === 'function' ? factory(...args$.value) : factory
+      return createInstance(resource)
+    },
+    with(...args: any[]): ResourceInstance<C, D> {
+      args$.next(args)
+      return instance
+    },
   }
+
+  return instance
 }

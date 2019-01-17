@@ -1,77 +1,141 @@
 import { createResource } from './'
-import basicResource from './fixtures/basic-resource'
+import BasicResource from './fixtures/basic-resource'
+
+const setupBasicInstance = () => {
+  const instance = BasicResource.read()
+  instance.start()
+  return instance
+}
 
 describe('context', () => {
-  test('basic context', async () => {
-    const instance = basicResource.read()
+  test('throw if is not started', async () => {
+    const instance = BasicResource.read()
 
-    expect(instance.context$.value).toEqual({ foo: 'foo' })
+    const fn = () => instance.setContext({ foo: 'bar' })
+    expect(fn).toThrow()
+  })
+
+  test('with initial arguments', async () => {
+    const resource = createResource(foo => ({
+      context: {
+        foo,
+      },
+      data: {
+        bar: () => 'bar',
+      },
+    }))
+
+    const instance = resource
+      .with('foo')
+      .read()
+      .start()
+
+    expect(instance.getContext()).toEqual({ foo: 'foo' })
+  })
+
+  test('basic context', async () => {
+    const { context$, data$, error$, ...instance } = setupBasicInstance()
+    const contextNext = jest.spyOn(context$, 'next')
+    const dataNext = jest.spyOn(data$, 'next')
+    const errorNext = jest.spyOn(error$, 'next')
+
+    expect(instance.getContext()).toEqual({ foo: 'foo' })
     instance.setContext({ foo: 'bar' })
-    expect(instance.context$.value).toEqual({ foo: 'bar' })
+
+    expect(contextNext).toBeCalledTimes(1)
+    expect(dataNext).toBeCalledTimes(1)
+    expect(errorNext).not.toBeCalled()
+    expect(instance.getContext()).toEqual({ foo: 'bar' })
   })
 
   test('using multiple instance', async () => {
-    const instanceX = basicResource.read()
-    const instanceY = basicResource.read()
+    const instanceX = setupBasicInstance()
+    const instanceY = setupBasicInstance()
 
     instanceX.setContext({ foo: 'bar' })
     instanceY.setContext({ foo: 'baz' })
 
-    expect(instanceX.context$.value).toEqual({ foo: 'bar' })
-    expect(instanceY.context$.value).toEqual({ foo: 'baz' })
+    expect(instanceX.getContext()).toEqual({ foo: 'bar' })
+    expect(instanceY.getContext()).toEqual({ foo: 'baz' })
   })
 
-  test('update context using function', async () => {
-    const instance = basicResource.read()
+  test('update just when change', async () => {
+    const { context$, ...instance } = setupBasicInstance()
+    const spy = jest.spyOn(context$, 'next')
 
-    instance.setContext(prev => ({ foo: prev.foo + 'bar' }))
-    expect(instance.context$.value).toEqual({ foo: 'foobar' })
+    instance.setContext({ foo: 'foo' })
+    expect(spy).not.toBeCalled()
   })
 
-  test('update context using mutation', async () => {
-    const instance = basicResource.read()
+  test('update using function', async () => {
+    const instance = setupBasicInstance()
+    const update = jest.fn(prev => ({ foo: prev.foo + 'bar' }))
+
+    instance.setContext(update)
+    expect(update).toBeCalled()
+    expect(update).toBeCalledTimes(1)
+    expect(instance.getContext()).toEqual({ foo: 'foobar' })
+  })
+
+  test('update using mutation', async () => {
+    const instance = setupBasicInstance()
+    const next = jest.spyOn(instance.context$, 'next')
 
     instance.send('SET_FOO', 'bar')
     instance.send('SET_FOO', 'baz')
     instance.send('SET_FOO', 'foo')
 
-    expect(instance.context$.value).toEqual({ foo: 'foo' })
+    expect(next).toBeCalledTimes(3)
+    expect(instance.getContext()).toEqual({ foo: 'foo' })
   })
 
-  test('update context inside effect', async () => {
-    const instance = basicResource.read()
+  test('update inside effect', async () => {
+    const instance = setupBasicInstance()
+    const spy = jest.spyOn(instance, 'send')
+
     instance.effects.changeFoo('bar')
     instance.effects.changeFoo('foo')
 
-    expect(instance.context$.value).toEqual({ foo: 'foo' })
+    expect(spy.mock.calls).toEqual([['SET_FOO', 'bar'], ['SET_FOO', 'foo']])
+    expect(instance.getContext()).toEqual({ foo: 'foo' })
   })
 })
 
 describe('data', () => {
   test('retrieve first data', async () => {
-    const instance = basicResource.read()
+    const instance = setupBasicInstance()
 
     instance.setContext({ foo: 'bar' })
-    expect(instance.data$.value).toEqual({})
+    expect(instance.getData()).toEqual({})
 
     await instance.update()
-    expect(instance.data$.value).toEqual({
+    expect(instance.getData()).toEqual({
       bar: 'barbar',
     })
   })
 
-  test('update data on context change', async () => {
-    const instance = basicResource.read()
+  test('update on context change', async () => {
+    const instance = setupBasicInstance()
 
     await instance.update()
-    expect(instance.data$.value).toEqual({
+    expect(instance.getData()).toEqual({
       bar: 'foobar',
     })
 
     instance.setContext({ foo: 'bar' })
-    expect(instance.data$.value).toEqual({
+    expect(instance.getData()).toEqual({
       bar: 'barbar',
     })
+  })
+
+  test('update just when data change', async () => {
+    const { data$, ...instance } = setupBasicInstance()
+    const spy = jest.spyOn(data$, 'next')
+
+    await instance.update()
+    expect(instance.getData()).toEqual({ bar: 'foobar' })
+    instance.setContext({ foo: 'foo' })
+    expect(spy).toBeCalledTimes(1)
   })
 
   test('get errors from data', async () => {
@@ -84,34 +148,34 @@ describe('data', () => {
     })
 
     const instance = resource.read()
+    instance.start()
     await instance.update()
-    expect(instance.error$.value.bar).toBeInstanceOf(Error)
-    expect(instance.data$.value.bar).toBeNull()
+    expect(instance.getError().bar).toBeInstanceOf(Error)
+    expect(instance.getData().bar).toBeNull()
   })
 
   test('reset all to initial', async () => {
-    const instance = basicResource.read()
+    const instance = setupBasicInstance()
 
     instance.setContext({ foo: 'bar' })
     await instance.update()
-    expect(instance.data$.value).toEqual({
+    expect(instance.getData()).toEqual({
       bar: 'barbar',
     })
 
     await instance.reset()
-    expect(instance.context$.value).toEqual({ foo: 'foo' })
-    expect(instance.data$.value).toEqual({
+    expect(instance.getContext()).toEqual({ foo: 'foo' })
+    expect(instance.getData()).toEqual({
       bar: 'foobar',
     })
   })
 
   test('resource listeners', async () => {
-    const instance = basicResource.read()
-    const ctxChangeFn = jest.fn(() => null)
+    const instance = BasicResource.read()
     const startFn = jest.fn(() => null)
     const doneFn = jest.fn(() => null)
 
-    instance.onContextChange(ctxChangeFn)
+    instance.start()
     instance.onUpdateStart(startFn)
     instance.onUpdateDone(doneFn)
     instance.setContext({ foo: 'bar' })
@@ -119,9 +183,6 @@ describe('data', () => {
 
     await instance.update()
 
-    expect(ctxChangeFn).toBeCalled()
-    expect(ctxChangeFn).toBeCalledTimes(3)
-    expect(ctxChangeFn).toBeCalledWith({ foo: 'foo' })
     expect(startFn).toBeCalled()
     expect(startFn).toBeCalledTimes(1)
     expect(startFn).toBeCalledWith()
