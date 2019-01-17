@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.0.1-alpha.7](https://github.com/pedronauck/xresource/compare/v0.0.1-alpha.6...v0.0.1-alpha.7) (2019-01-17)
+
+**Note:** Version bump only for package @xresource/react
+
+
+
+
+
 ## [0.0.1-alpha.6](https://github.com/pedronauck/xresource/compare/v0.0.1-alpha.2...v0.0.1-alpha.6) (2019-01-16)
 
 
