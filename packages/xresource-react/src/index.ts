@@ -1,15 +1,11 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Resource, ErrorMap, ResourceInstance } from 'xresource'
 
-type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>
-type OmitProps = 'effects' | 'onUpdateStart' | 'onUpdateDone'
-
-export interface UseResource<C, D> extends Omit<Resource<C, D>, OmitProps> {
+export interface UseResource<C, D> extends Resource<C, D> {
   ctx: C
   data: D
   error: ErrorMap<D>
   loading: boolean
-  [key: string]: any
 }
 
 export interface UseResourceOpts {
@@ -21,15 +17,7 @@ export function useResource<C = any, D = any>(
   opts: UseResourceOpts = { updateOnRead: true }
 ): UseResource<C, D> {
   const resource = useMemo(() => instance.read().start(), [])
-
-  const {
-    effects,
-    context$,
-    data$,
-    error$,
-    onUpdateDone,
-    onUpdateStart,
-  } = resource
+  const { context$, data$, error$, onUpdateDone, onUpdateStart } = resource
 
   const [ctx, setCtx] = useState(context$.value)
   const [data, setData] = useState(data$.value)
@@ -50,7 +38,6 @@ export function useResource<C = any, D = any>(
 
   return {
     ...resource,
-    ...effects,
     ctx,
     data,
     loading,
