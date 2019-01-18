@@ -42,7 +42,7 @@ export const TodoItem = ({ item }) => {
   })
 
   const { ctx, data, loading, handlers } = resource
-  const isLoading = loading || ctx.deleting
+  const isLoading = loading || ctx.deleting || ctx.completing
   const title = get(data, 'todo.title')
   const body = get(data, 'todo.body')
 

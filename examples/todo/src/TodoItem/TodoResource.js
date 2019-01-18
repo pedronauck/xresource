@@ -7,6 +7,7 @@ import * as api from '../api'
 export const TodoResource = createResource(item => ({
   context: {
     showing: false,
+    completing: false,
     deleting: false,
     loaded: false,
   },
@@ -15,7 +16,7 @@ export const TodoResource = createResource(item => ({
       source: async () => api.getTodo(item.id),
     },
   },
-  effects: {
+  handlers: {
     openModal: async _ => {
       const ctx = _.getContext()
 
@@ -34,8 +35,10 @@ export const TodoResource = createResource(item => ({
       _.setContext({ showing: false })
     },
     completeTodo: async (_, id, completed) => {
+      _.setContext({ completing: true })
       emit('todo:item-completed', id)
       await api.updateTodo(id, { completed })
+      _.setContext({ completing: false })
     },
     deleteTodo: async (_, id) => {
       _.setContext({ deleting: true })
