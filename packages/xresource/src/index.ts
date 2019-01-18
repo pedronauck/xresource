@@ -4,16 +4,13 @@ import memoize from 'memoize-one'
 
 export type Updater<C> = (prev: C) => C
 
-export type Mutation<C> = (ctx: C, payload: any) => Partial<C>
-export type Mutations<C> = Record<string, Mutation<C>>
-
-export type Effect<C, D> = (
+export type Handler<C, D> = (
   resource: Resource<C, D>,
   ...args: any[]
 ) => void | Promise<void>
 
-export type Effects<C, D> = Record<string, Effect<C, D>>
-export type PureEffects = Record<
+export type Handlers<C, D> = Record<string, Handler<C, D>>
+export type PureHandlers = Record<
   string,
   (...args: any[]) => void | Promise<void>
 >
@@ -43,17 +40,16 @@ export interface UpdateOpts {
 }
 
 export interface Factory<C, D> {
-  context?: C
   data: DataDescriptor<C, D>
-  mutations?: Mutations<C>
-  effects?: Effects<C, D>
+  context?: C
+  handlers?: Handlers<C, D>
 }
 
 export type FactoryFn<C, D> = (...args: any[]) => Factory<C, D>
 export type ResourceFactory<C, D> = Factory<C, D> | FactoryFn<C, D>
 
 export interface Resource<C, D> {
-  effects: PureEffects
+  handlers: PureHandlers
   context$: BehaviorSubject<C>
   data$: BehaviorSubject<D>
   error$: BehaviorSubject<ErrorMap<D>>
@@ -81,13 +77,13 @@ function mapToObject<T>(map: Map<string, any>): T {
   )
 }
 
-function reduceEffects<C, D>(
-  effects: Effects<C, D>,
+function reduceHandlers<C, D>(
+  handlers: Handlers<C, D>,
   factory: (...args: any[]) => any
-): PureEffects {
-  return Object.keys(effects).reduce((obj, key) => {
-    const effect = effects[key]
-    return { ...obj, [key]: factory(effect) }
+): PureHandlers {
+  return Object.keys(handlers).reduce((obj, key) => {
+    const handler = handlers[key]
+    return { ...obj, [key]: factory(handler) }
   }, {})
 }
 
@@ -100,10 +96,9 @@ const modify = memoize(
 )
 
 function createInstance<C = any, D = any>({
-  mutations,
   data: dataDescriptor,
   context: initialContext,
-  effects: defaultEffects = {},
+  handlers: defaultHandlers = {},
 }: Factory<C, D>): Resource<C, D> {
   const data$ = new BehaviorSubject<D>({} as D)
   const context$ = new BehaviorSubject<C>({} as C)
@@ -220,16 +215,16 @@ function createInstance<C = any, D = any>({
     }
   }
 
-  const effects = reduceEffects<C, D>(
-    defaultEffects,
-    effect => (...args: any[]) => effect(resource, ...args)
+  const handlers = reduceHandlers<C, D>(
+    defaultHandlers,
+    handler => (...args: any[]) => handler(resource, ...args)
   )
 
   const resource: Resource<C, D> = {
     context$,
     data$,
     error$,
-    effects,
+    handlers,
 
     getContext(): C {
       return context$.value
