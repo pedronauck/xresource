@@ -138,6 +138,16 @@ describe('data', () => {
     expect(spy).toBeCalledTimes(1)
   })
 
+  test('update data using setData', async () => {
+    const { data$, ...instance } = setupBasicInstance()
+    const spy = jest.spyOn(data$, 'next')
+
+    await instance.update()
+    instance.setData(prev => ({ bar: prev.bar + 'foo' }))
+    expect(spy).toBeCalledTimes(2)
+    expect(instance.getData()).toEqual({ bar: 'foobarfoo' })
+  })
+
   test('get errors from data', async () => {
     const resource = createResource({
       data: {

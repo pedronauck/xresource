@@ -52,12 +52,6 @@ export interface Factory<C, D> {
 export type FactoryFn<C, D> = (...args: any[]) => Factory<C, D>
 export type ResourceFactory<C, D> = Factory<C, D> | FactoryFn<C, D>
 
-export interface Memory<C, D> {
-  startListeners: Set<StartListener>
-  doneListeners: Set<DoneListener<D>>
-  isStarted: boolean
-}
-
 export interface Resource<C, D> {
   effects: PureEffects
   context$: BehaviorSubject<C>
@@ -72,6 +66,7 @@ export interface Resource<C, D> {
   reset(): Promise<void>
   send(type: string, payload?: any): void
   setContext(next: Updater<C> | Partial<C>): void
+  setData(next: Updater<D> | Partial<D>): void
   onUpdateStart(listener: StartListener): () => void
   onUpdateDone(listener: DoneListener<D>): () => void
 }
@@ -115,38 +110,32 @@ function createInstance<C = any, D = any>({
   const context$ = new BehaviorSubject<C>({} as C)
   const pureData$ = new BehaviorSubject<D>({} as D)
   const error$ = new BehaviorSubject<ErrorMap<D>>({} as ErrorMap<D>)
-  const memory$ = new BehaviorSubject<Memory<C, D>>({
-    startListeners: new Set(),
-    doneListeners: new Set(),
-    isStarted: false,
-  })
+  const startListeners = new Set<StartListener>()
+  const doneListeners = new Set<DoneListener<D>>()
+  const state = new Map<string, boolean>()
 
   const throwWithStarted = () => {
-    if (!memory$.value.isStarted) {
+    if (!state.get('isStarted')) {
       throw new Error('You need to start your resource before go')
     }
   }
 
   const setInitial = () => {
-    const actualMemory = memory$.value
-
-    memory$.next({ ...actualMemory, isStarted: true })
+    state.set('isStarted', true)
     context$.next(initialContext || ({} as C))
     pureData$.next({} as D)
     data$.next({} as D)
     error$.next({} as ErrorMap<D>)
-    actualMemory.startListeners.clear()
-    actualMemory.doneListeners.clear()
+    startListeners.clear()
+    doneListeners.clear()
   }
 
   const runStartListeners = () => {
-    const listeners = memory$.value.startListeners
-    listeners.forEach(listener => listener())
+    startListeners.forEach(listener => listener())
   }
 
   const runDoneListeners = () => {
-    const listeners = memory$.value.doneListeners
-    listeners.forEach(listener => listener(data$.value, error$.value))
+    doneListeners.forEach(listener => listener(data$.value, error$.value))
   }
 
   function updateSubject<T>(subject: BehaviorSubject<T>, next: T): boolean {
@@ -169,20 +158,22 @@ function createInstance<C = any, D = any>({
     const errorMap = new Map<string, any>()
 
     runStartListeners()
-    for (const [key, entry] of dataMap) {
+    for (const [key, entry] of entries) {
       try {
-        if (entry && entry.source) {
+        if (entry && typeof entry !== 'function' && entry.source) {
           const { source, modifiers } = entry
           const pureData = await source(ctxValue, mapToObject(dataMap) as D)
-          const data = modify(modifiers, ctxValue, pureData)
+          const data = modify(modifiers || [], ctxValue, pureData)
 
           dataMap.set(key, data)
           pureDataMap.set(key, pureData)
+          state.set('hasData', true)
         }
         if (typeof entry === 'function') {
           const result = await entry(ctxValue, mapToObject(dataMap) as D)
           dataMap.set(key, result)
           pureDataMap.set(key, result)
+          state.set('hasData', true)
         }
       } catch (err) {
         dataMap.set(key, null)
@@ -191,12 +182,18 @@ function createInstance<C = any, D = any>({
       }
     }
 
-    updateSubject<D>(pureData$, mapToObject(pureDataMap))
-    const dataEqual = updateSubject<D>(data$, mapToObject(dataMap))
-    const errorEqual = updateSubject<ErrorMap<D>>(error$, mapToObject(errorMap))
+    const nextData = mapToObject<D>(dataMap)
+    const nextPureData = mapToObject<D>(pureDataMap)
+    const nextError = mapToObject<ErrorMap<D>>(errorMap)
 
-    if (!dataEqual || !errorEqual) {
-      runDoneListeners()
+    if (Object.keys(nextData).length > 0) {
+      updateSubject<D>(pureData$, nextPureData)
+      const dataEqual = updateSubject<D>(data$, mapToObject(dataMap))
+      const errorEqual = updateSubject<ErrorMap<D>>(error$, nextError)
+
+      if (!dataEqual || !errorEqual) {
+        runDoneListeners()
+      }
     }
   }
 
@@ -207,18 +204,21 @@ function createInstance<C = any, D = any>({
   const updateJustModifiers = () => {
     const ctxValue = context$.value
     const entries = Object.entries(dataDescriptor || {})
-    const dataMap = new Map<string, any>(entries)
+    const dataMap = new Map<string, any>()
 
-    for (const [key, entry] of dataMap) {
-      if (entry && Array.isArray(entry.modifiers)) {
+    for (const [key, entry] of entries) {
+      if (typeof entry !== 'function' && Array.isArray(entry.modifiers)) {
         const pureData = get(pureData$.value, key)
         const data = pureData && modify(entry.modifiers, ctxValue, pureData)
         dataMap.set(key, data)
       }
     }
 
-    updateSubject<D>(data$, mapToObject(dataMap))
-    runDoneListeners()
+    const next = mapToObject(dataMap)
+    if (Object.keys(next).length > 0) {
+      updateSubject<D>(data$, mapToObject(dataMap))
+      runDoneListeners()
+    }
   }
 
   const effects = reduceEffects<C, D>(
@@ -245,18 +245,17 @@ function createInstance<C = any, D = any>({
     },
 
     start(): Resource<C, D> {
-      if (memory$.value.isStarted) return resource
+      if (state.get('isStarted')) return resource
       setInitial()
       return resource
     },
 
     stop(): Resource<C, D> {
-      const memory = memory$.value
       context$.unsubscribe()
       data$.unsubscribe()
       error$.unsubscribe()
-      memory.startListeners.clear()
-      memory.doneListeners.clear()
+      startListeners.clear()
+      doneListeners.clear()
       return resource
     },
 
@@ -293,21 +292,30 @@ function createInstance<C = any, D = any>({
       !equal && updateJustModifiers()
     },
 
+    setData(value): void {
+      throwWithStarted()
+      const data = data$.value
+      const next =
+        typeof value === 'function' ? value(data) : { ...data, ...value }
+
+      updateSubject<D>(data$, next)
+      updateSubject<D>(pureData$, next)
+    },
+
     onUpdateStart(listener: StartListener): () => void {
       throwWithStarted()
-      const { startListeners } = memory$.value
       startListeners.add(listener)
       return () => startListeners.delete(listener)
     },
 
     onUpdateDone(listener: DoneListener<D>): () => void {
       throwWithStarted()
-      const { doneListeners } = memory$.value
       doneListeners.add(listener)
       return () => doneListeners.delete(listener)
     },
   }
 
+  state.set('isStarted', false)
   return resource
 }
 
