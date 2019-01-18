@@ -1,0 +1,30 @@
+{
+  "name": "@xresource/example-todo",
+  "version": "0.0.1-alpha.2",
+  "license": "MIT",
+  "scripts": {
+    "build": "poi --prod",
+    "dev": "poi --serve"
+  },
+  "dependencies": {
+    "@xresource/react": "^0.0.1-alpha.2",
+    "antd": "^3.12.3",
+    "gery": "^1.1.3",
+    "gql-tag": "^1.0.1",
+    "kord": "^0.0.1-alpha.1",
+    "lodash": "^4.17.11",
+    "match-sorter": "^2.3.0",
+    "react": "^16.8.0-alpha.1",
+    "react-dom": "^16.8.0-alpha.1",
+    "react-markdown": "^4.0.6",
+    "rebass": "^3.0.0-12",
+    "styled-components": "^4.1.3",
+    "xresource": "^0.0.1-alpha.2"
+  },
+  "devDependencies": {
+    "poi": "^12.4.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
