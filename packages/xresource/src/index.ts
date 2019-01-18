@@ -62,9 +62,8 @@ export interface Resource<C, D> {
   getError(): ErrorMap<D>
   start(): Resource<C, D>
   stop(): Resource<C, D>
-  update(): Promise<void>
+  load(): Promise<void>
   reset(): Promise<void>
-  send(type: string, payload?: any): void
   setContext(next: Updater<C> | Partial<C>): void
   setData(next: Updater<D> | Partial<D>): void
   onUpdateStart(listener: StartListener): () => void
@@ -145,8 +144,8 @@ function createInstance<C = any, D = any>({
   }
 
   /**
-   * this function will run after each async update()
-   * but won't read when call setContext() or send()
+   * this function will run after each async load()
+   * but won't read when call setContext() or dispatch()
    */
   const updateAsync = async () => {
     if (!dataDescriptor) return
@@ -198,7 +197,7 @@ function createInstance<C = any, D = any>({
   }
 
   /**
-   * this function will run after each setContext and send
+   * this function will run after each setContext and dispatch
    * it will just get pureData and apply midifiers using new context value
    */
   const updateJustModifiers = () => {
@@ -259,7 +258,7 @@ function createInstance<C = any, D = any>({
       return resource
     },
 
-    async update(): Promise<void> {
+    async load(): Promise<void> {
       throwWithStarted()
       await updateAsync()
     },
@@ -267,19 +266,6 @@ function createInstance<C = any, D = any>({
     async reset(): Promise<void> {
       setInitial()
       await updateAsync()
-    },
-
-    send(type, payload): void {
-      throwWithStarted()
-      if (mutations && Object.keys(mutations).length > 0) {
-        const mutation = mutations[type]
-
-        if (mutation && typeof mutation === 'function') {
-          const next = mutation(context$.value, payload) as C
-          const equal = updateSubject<C>(context$, next)
-          !equal && updateJustModifiers()
-        }
-      }
     },
 
     setContext(value): void {

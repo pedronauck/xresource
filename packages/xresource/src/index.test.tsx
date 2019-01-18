@@ -77,26 +77,12 @@ describe('context', () => {
     expect(instance.getContext()).toEqual({ foo: 'foobar' })
   })
 
-  test('update using mutation', async () => {
-    const instance = setupBasicInstance()
-    const next = jest.spyOn(instance.context$, 'next')
-
-    instance.send('SET_FOO', 'bar')
-    instance.send('SET_FOO', 'baz')
-    instance.send('SET_FOO', 'foo')
-
-    expect(next).toBeCalledTimes(3)
-    expect(instance.getContext()).toEqual({ foo: 'foo' })
-  })
-
   test('update inside effect', async () => {
     const instance = setupBasicInstance()
-    const spy = jest.spyOn(instance, 'send')
 
     instance.effects.changeFoo('bar')
     instance.effects.changeFoo('foo')
 
-    expect(spy.mock.calls).toEqual([['SET_FOO', 'bar'], ['SET_FOO', 'foo']])
     expect(instance.getContext()).toEqual({ foo: 'foo' })
   })
 })
@@ -108,7 +94,7 @@ describe('data', () => {
     instance.setContext({ foo: 'bar' })
     expect(instance.getData()).toEqual({})
 
-    await instance.update()
+    await instance.load()
     expect(instance.getData()).toEqual({
       bar: 'barbar',
     })
@@ -117,7 +103,7 @@ describe('data', () => {
   test('update on context change', async () => {
     const instance = setupBasicInstance()
 
-    await instance.update()
+    await instance.load()
     expect(instance.getData()).toEqual({
       bar: 'foobar',
     })
@@ -132,7 +118,7 @@ describe('data', () => {
     const { data$, ...instance } = setupBasicInstance()
     const spy = jest.spyOn(data$, 'next')
 
-    await instance.update()
+    await instance.load()
     expect(instance.getData()).toEqual({ bar: 'foobar' })
     instance.setContext({ foo: 'foo' })
     expect(spy).toBeCalledTimes(1)
@@ -142,7 +128,7 @@ describe('data', () => {
     const { data$, ...instance } = setupBasicInstance()
     const spy = jest.spyOn(data$, 'next')
 
-    await instance.update()
+    await instance.load()
     instance.setData(prev => ({ bar: prev.bar + 'foo' }))
     expect(spy).toBeCalledTimes(2)
     expect(instance.getData()).toEqual({ bar: 'foobarfoo' })
@@ -159,7 +145,7 @@ describe('data', () => {
 
     const instance = resource.read()
     instance.start()
-    await instance.update()
+    await instance.load()
     expect(instance.getError().bar).toBeInstanceOf(Error)
     expect(instance.getData().bar).toBeNull()
   })
@@ -168,7 +154,7 @@ describe('data', () => {
     const instance = setupBasicInstance()
 
     instance.setContext({ foo: 'bar' })
-    await instance.update()
+    await instance.load()
     expect(instance.getData()).toEqual({
       bar: 'barbar',
     })
@@ -191,7 +177,7 @@ describe('data', () => {
     instance.setContext({ foo: 'bar' })
     instance.setContext({ foo: 'foo' })
 
-    await instance.update()
+    await instance.load()
 
     expect(startFn).toBeCalled()
     expect(startFn).toBeCalledTimes(1)

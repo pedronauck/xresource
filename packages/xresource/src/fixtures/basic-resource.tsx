@@ -22,8 +22,8 @@ export default createResource<Context, Data>({
     SET_FOO: (ctx, foo) => ({ ...ctx, foo }),
   },
   effects: {
-    changeFoo: (resource, foo) => {
-      resource.send('SET_FOO', foo)
+    changeFoo: (_, foo) => {
+      _.setContext({ foo })
     },
   },
 })
