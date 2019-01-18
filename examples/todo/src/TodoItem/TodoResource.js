@@ -15,36 +15,32 @@ export const TodoResource = createResource(item => ({
       source: async () => api.getTodo(item.id),
     },
   },
-  mutations: {
-    SET_SHOWING: (ctx, showing) => ({ ...ctx, showing }),
-    SET_LOADED: (ctx, loaded) => ({ ...ctx, loaded }),
-    SET_DELETING: (ctx, deleting) => ({ ...ctx, deleting }),
-  },
   effects: {
-    openModal: async ({ getContext, send, update }) => {
-      const ctx = getContext()
+    openModal: async _ => {
+      const ctx = _.getContext()
 
       if (ctx.loaded) {
-        send('SET_SHOWING', true)
+        _.setContext({ showing: true })
         return
       }
 
-      await update()
-      send('SET_LOADED', true)
-      send('SET_SHOWING', true)
+      await _.load()
+      _.setContext({
+        loaded: false,
+        showing: true,
+      })
     },
-    closeModal: ({ send }) => {
-      send('SET_SHOWING', false)
+    closeModal: _ => {
+      _.setContext({ showing: false })
     },
-    completeTodo: async ({ send }, id, completed) => {
+    completeTodo: async (_, id, completed) => {
       emit('todo:item-completed', id)
       await api.updateTodo(id, { completed })
-      send('SET_SHOWING', false)
     },
-    deleteTodo: async ({ send }, id) => {
-      send('SET_DELETING', true)
+    deleteTodo: async (_, id) => {
+      _.setContext({ deleting: true })
       await api.deleteTodo(id)
-      send('SET_DELETING', false)
+      _.setContext({ deleteing: false })
       emit('todo:item-deleted', id)
       message.success('Successfully deleted')
     },

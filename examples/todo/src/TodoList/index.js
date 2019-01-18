@@ -19,13 +19,12 @@ const Wrapper = styled(Box)`
 `
 
 export const TodoList = ({ renderItem }) => {
-  const { ctx, data, send, loading, effects } = useResource(TodosResource)
-  const { deleteOnList, setCompleted, addOnList } = effects
+  const { ctx, data, loading, handlers } = useResource(TodosResource)
 
   useEffect(() => {
-    on('todo:item-deleted', deleteOnList)
-    on('todo:item-completed', setCompleted)
-    on('todo:create-todo', addOnList)
+    on('todo:item-deleted', handlers.deleteOnList)
+    on('todo:item-completed', handlers.setCompleted)
+    on('todo:create-todo', handlers.addOnList)
   }, [])
 
   return (
@@ -36,8 +35,8 @@ export const TodoList = ({ renderItem }) => {
           <Topbar
             filter={ctx.filter}
             query={ctx.query}
-            onSearch={query => send('SET_QUERY', query)}
-            onFilter={filter => send('SET_FILTER', filter)}
+            onSearch={handlers.setQuery}
+            onFilter={handlers.setFilter}
           />
         )}
         <Box mt={3}>

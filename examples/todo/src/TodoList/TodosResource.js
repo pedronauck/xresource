@@ -34,19 +34,21 @@ export const TodosResource = createResource(() => ({
       modifiers: [findByQuery, filterByFilter],
     },
   },
-  mutations: {
-    SET_QUERY: (ctx, query) => ({ ...ctx, query }),
-    SET_FILTER: (ctx, filter) => ({ ...ctx, filter }),
-  },
-  effects: {
-    deleteOnList: ({ setData }, id) => {
-      setData(prev => ({ todos: deleteOnList(prev.todos, id) }))
+  handlers: {
+    setFilter: (_, filter) => {
+      _.setContext({ filter })
     },
-    setCompleted: ({ setData }, id) => {
-      setData(prev => ({ todos: setCompleted(prev.todos, id) }))
+    setQuery: (_, query) => {
+      _.setContext({ query })
     },
-    addOnList: ({ setData }, todo) => {
-      setData(prev => ({ todos: prev.todos.concat([todo]) }))
+    deleteOnList: (_, id) => {
+      _.setData(prev => ({ todos: deleteOnList(prev.todos, id) }))
+    },
+    setCompleted: (_, id) => {
+      _.setData(prev => ({ todos: setCompleted(prev.todos, id) }))
+    },
+    addOnList: (_, todo) => {
+      _.setData(prev => ({ todos: prev.todos.concat([todo]) }))
     },
   },
 }))

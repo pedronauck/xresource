@@ -41,26 +41,24 @@ export const TodoItem = ({ item }) => {
     updateOnRead: false,
   })
 
-  const { ctx, data, loading, effects } = resource
-  const { completeTodo, deleteTodo, openModal, closeModal } = effects
-
+  const { ctx, data, loading, handlers } = resource
   const isLoading = loading || ctx.deleting
   const title = get(data, 'todo.title')
   const body = get(data, 'todo.body')
 
   const onDeleteConfirm = async () => {
-    await deleteTodo(item.id)
+    await handlers.deleteTodo(item.id)
   }
 
   const onComplete = async () => {
-    await completeTodo(item.id, Boolean(!item.completed))
+    await handlers.completeTodo(item.id, Boolean(!item.completed))
   }
 
   return (
     <List.Item
       actions={
         !isLoading && [
-          <ViewButton onClick={openModal} />,
+          <ViewButton onClick={handlers.openModal} />,
           <DeleteButton onConfirm={onDeleteConfirm} />,
         ]
       }
@@ -75,7 +73,7 @@ export const TodoItem = ({ item }) => {
           <Modal
             title={title}
             visible={ctx.showing}
-            onCancel={closeModal}
+            onCancel={handlers.closeModal}
             footer={null}
           >
             <Markdown>

@@ -18,10 +18,7 @@ it('using a basic resource', async () => {
 
 it('without update on read', async () => {
   const Foo = () => {
-    const { ctx, data } = useResource(BasicResource, {
-      updateOnRead: false,
-    })
-
+    const { ctx, data } = useResource(BasicResource, { loadOnRead: false })
     return <div>{ctx.foo + data.bar}</div>
   }
 

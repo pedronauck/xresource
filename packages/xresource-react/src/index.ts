@@ -9,12 +9,12 @@ export interface UseResource<C, D> extends Resource<C, D> {
 }
 
 export interface UseResourceOpts {
-  updateOnRead?: boolean
+  loadOnRead?: boolean
 }
 
 export function useResource<C = any, D = any>(
   instance: ResourceInstance<C, D>,
-  opts: UseResourceOpts = { updateOnRead: true }
+  opts: UseResourceOpts = { loadOnRead: true }
 ): UseResource<C, D> {
   const resource = useMemo(() => instance.read().start(), [])
   const { context$, data$, error$, onUpdateDone, onUpdateStart } = resource
@@ -30,7 +30,7 @@ export function useResource<C = any, D = any>(
     error$.subscribe(setError)
     onUpdateStart(() => setLoading(true))
     onUpdateDone(() => setLoading(false))
-    opts.updateOnRead && resource.update()
+    opts.loadOnRead && resource.load()
     return () => {
       resource.stop()
     }

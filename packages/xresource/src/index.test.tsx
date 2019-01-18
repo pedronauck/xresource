@@ -80,8 +80,8 @@ describe('context', () => {
   test('update inside effect', async () => {
     const instance = setupBasicInstance()
 
-    instance.effects.changeFoo('bar')
-    instance.effects.changeFoo('foo')
+    instance.handlers.changeFoo('bar')
+    instance.handlers.changeFoo('foo')
 
     expect(instance.getContext()).toEqual({ foo: 'foo' })
   })
