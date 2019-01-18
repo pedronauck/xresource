@@ -1,6 +1,6 @@
 {
   "name": "@xresource/react",
-  "version": "0.0.1-alpha.9",
+  "version": "0.0.1",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "react": "^16.8.0-alpha.1",
-    "xresource": "^0.0.1-alpha.9"
+    "xresource": "^0.0.1"
   },
   "peerDependencies": {
     "react": "^16.8.0-alpha.1"

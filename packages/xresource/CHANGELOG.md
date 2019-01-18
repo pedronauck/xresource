@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.0.1](https://github.com/pedronauck/xresource/compare/v0.0.1-alpha.9...v0.0.1) (2019-01-18)
+
+
+### Features
+
+* **react:** use loadOnMount instead of loadOnRead ([973b0b4](https://github.com/pedronauck/xresource/commit/973b0b4))
+
+
+
+
+
 ## [0.0.1-alpha.9](https://github.com/pedronauck/xresource/compare/v0.0.1-alpha.8...v0.0.1-alpha.9) (2019-01-18)
 
 
