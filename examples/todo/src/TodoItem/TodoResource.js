@@ -43,7 +43,7 @@ export const TodoResource = createResource(item => ({
     deleteTodo: async (_, id) => {
       _.setContext({ deleting: true })
       await api.deleteTodo(id)
-      _.setContext({ deleteing: false })
+      _.setContext({ deleting: false })
       emit('todo:item-deleted', id)
       message.success('Successfully deleted')
     },
