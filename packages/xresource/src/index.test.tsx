@@ -31,6 +31,8 @@ describe('context', () => {
       .start()
 
     expect(instance.getContext()).toEqual({ foo: 'foo' })
+    instance.setContext({ foo: 'bar' })
+    expect(instance.getContext()).toEqual({ foo: 'bar' })
   })
 
   test('basic context', async () => {

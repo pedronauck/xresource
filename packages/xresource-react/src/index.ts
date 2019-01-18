@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Resource, ErrorMap, ResourceInstance } from 'xresource'
 
 export interface UseResource<C, D> extends Resource<C, D> {
@@ -9,14 +9,14 @@ export interface UseResource<C, D> extends Resource<C, D> {
 }
 
 export interface UseResourceOpts {
-  loadOnRead?: boolean
+  loadOnMount?: boolean
 }
 
 export function useResource<C = any, D = any>(
   instance: ResourceInstance<C, D>,
-  opts: UseResourceOpts = { loadOnRead: true }
+  opts: UseResourceOpts = { loadOnMount: true }
 ): UseResource<C, D> {
-  const resource = useMemo(() => instance.read().start(), [])
+  const [resource] = useState(() => instance.read().start())
   const { context$, data$, error$, onUpdateDone, onUpdateStart } = resource
 
   const [ctx, setCtx] = useState(context$.value)
@@ -30,7 +30,7 @@ export function useResource<C = any, D = any>(
     error$.subscribe(setError)
     onUpdateStart(() => setLoading(true))
     onUpdateDone(() => setLoading(false))
-    opts.loadOnRead && resource.load()
+    opts.loadOnMount && resource.load()
     return () => {
       resource.stop()
     }
