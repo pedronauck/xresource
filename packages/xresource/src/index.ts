@@ -2,6 +2,9 @@ import { BehaviorSubject } from 'rxjs'
 import deepEqual from 'fast-deep-equal'
 import memoize from 'memoize-one'
 
+const __ALL_RESOURCES = new Set<Resource<any, any>>()
+const isStr = (val: any) => typeof val === 'string'
+
 export type Updater<C> = (prev: C) => C
 
 export type Handler<C, D> = (
@@ -39,32 +42,18 @@ export interface UpdateOpts {
   async?: boolean
 }
 
+export type EventMap<C, D> = Record<string, string | string[] | Handler<C, D>>
+
 export interface Factory<C, D> {
+  id?: string
   data: DataDescriptor<C, D>
   context?: C
   handlers?: Handlers<C, D>
+  on?: EventMap<C, D>
 }
 
 export type FactoryFn<C, D> = (...args: any[]) => Factory<C, D>
 export type ResourceFactory<C, D> = Factory<C, D> | FactoryFn<C, D>
-
-export interface Resource<C, D> {
-  handlers: PureHandlers
-  context$: BehaviorSubject<C>
-  data$: BehaviorSubject<D>
-  error$: BehaviorSubject<ErrorMap<D>>
-  getContext(): C
-  getData(): D
-  getError(): ErrorMap<D>
-  start(): Resource<C, D>
-  stop(): Resource<C, D>
-  load(): Promise<void>
-  reset(): Promise<void>
-  setContext(next: Updater<C> | Partial<C>): void
-  setData(next: Updater<D> | Partial<D>): void
-  onUpdateStart(listener: StartListener): () => void
-  onUpdateDone(listener: DoneListener<D>): () => void
-}
 
 function get<T>(obj: any, key: string): T {
   return obj[key]
@@ -95,10 +84,32 @@ const modify = memoize(
   deepEqual
 )
 
+export interface Resource<C, D> {
+  __id?: string
+  handlers: PureHandlers
+  context$: BehaviorSubject<C>
+  data$: BehaviorSubject<D>
+  error$: BehaviorSubject<ErrorMap<D>>
+  getContext(): C
+  getData(): D
+  getError(): ErrorMap<D>
+  stop(): Resource<C, D>
+  read(): Promise<void>
+  reset(): Promise<void>
+  setContext(next: Updater<C> | Partial<C>): void
+  setData(next: Updater<D> | Partial<D>): void
+  emit(type: string, value: any): void
+  broadcast(type: string, value: any): void
+  onReadStart(listener: StartListener): () => void
+  onReadDone(listener: DoneListener<D>): () => void
+}
+
 function createInstance<C = any, D = any>({
+  id: __id,
   data: dataDescriptor,
   context: initialContext,
   handlers: defaultHandlers = {},
+  on = {},
 }: Factory<C, D>): Resource<C, D> {
   const data$ = new BehaviorSubject<D>({} as D)
   const context$ = new BehaviorSubject<C>({} as C)
@@ -106,16 +117,8 @@ function createInstance<C = any, D = any>({
   const error$ = new BehaviorSubject<ErrorMap<D>>({} as ErrorMap<D>)
   const startListeners = new Set<StartListener>()
   const doneListeners = new Set<DoneListener<D>>()
-  const state = new Map<string, boolean>()
-
-  const throwWithStarted = () => {
-    if (!state.get('isStarted')) {
-      throw new Error('You need to start your resource before go')
-    }
-  }
 
   const setInitial = () => {
-    state.set('isStarted', true)
     context$.next(initialContext || ({} as C))
     pureData$.next({} as D)
     data$.next({} as D)
@@ -161,13 +164,11 @@ function createInstance<C = any, D = any>({
 
           dataMap.set(key, data)
           pureDataMap.set(key, pureData)
-          state.set('hasData', true)
         }
         if (typeof entry === 'function') {
           const result = await entry(ctxValue, mapToObject(dataMap) as D)
           dataMap.set(key, result)
           pureDataMap.set(key, result)
-          state.set('hasData', true)
         }
       } catch (err) {
         dataMap.set(key, null)
@@ -221,10 +222,12 @@ function createInstance<C = any, D = any>({
   )
 
   const resource: Resource<C, D> = {
+    __id,
     context$,
     data$,
     error$,
     handlers,
+    broadcast,
 
     getContext(): C {
       return context$.value
@@ -238,23 +241,17 @@ function createInstance<C = any, D = any>({
       return error$.value
     },
 
-    start(): Resource<C, D> {
-      if (state.get('isStarted')) return resource
-      setInitial()
-      return resource
-    },
-
     stop(): Resource<C, D> {
       context$.unsubscribe()
       data$.unsubscribe()
       error$.unsubscribe()
       startListeners.clear()
       doneListeners.clear()
+      __ALL_RESOURCES.delete(resource)
       return resource
     },
 
-    async load(): Promise<void> {
-      throwWithStarted()
+    async read(): Promise<void> {
       await updateAsync()
     },
 
@@ -264,7 +261,6 @@ function createInstance<C = any, D = any>({
     },
 
     setContext(value): void {
-      throwWithStarted()
       const context = context$.value
       const next =
         typeof value === 'function' ? value(context) : { ...context, ...value }
@@ -274,7 +270,6 @@ function createInstance<C = any, D = any>({
     },
 
     setData(value): void {
-      throwWithStarted()
       const data = data$.value
       const next =
         typeof value === 'function' ? value(data) : { ...data, ...value }
@@ -283,25 +278,43 @@ function createInstance<C = any, D = any>({
       updateSubject<D>(pureData$, next)
     },
 
-    onUpdateStart(listener: StartListener): () => void {
-      throwWithStarted()
+    emit(type, value): void {
+      const select = on[type]
+
+      if (!select) return
+      if (Array.isArray(select) && select.every(isStr)) {
+        select.forEach(name => {
+          const handler = handlers[name]
+          handler && handler(value)
+        })
+      }
+      if (typeof select === 'function') {
+        select(resource, value)
+      }
+      if (typeof select === 'string') {
+        const handler = handlers[select]
+        handler && handler(value)
+      }
+    },
+
+    onReadStart(listener: StartListener): () => void {
       startListeners.add(listener)
       return () => startListeners.delete(listener)
     },
 
-    onUpdateDone(listener: DoneListener<D>): () => void {
-      throwWithStarted()
+    onReadDone(listener: DoneListener<D>): () => void {
       doneListeners.add(listener)
       return () => doneListeners.delete(listener)
     },
   }
 
-  state.set('isStarted', false)
+  setInitial()
+  __ALL_RESOURCES.add(resource)
   return resource
 }
 
 export interface ResourceInstance<C, D> {
-  read: () => Resource<C, D>
+  create: () => Resource<C, D>
   with: (...args: any[]) => ResourceInstance<C, D>
 }
 
@@ -314,16 +327,25 @@ export function createResource<C = DefaultContext, D = DefaultData>(
   const args$ = new BehaviorSubject<any>([])
 
   const instance = {
-    read(): Resource<C, D> {
-      const resource =
-        typeof factory === 'function' ? factory(...args$.value) : factory
-      return createInstance(resource)
-    },
     with(...args: any[]): ResourceInstance<C, D> {
       args$.next(args)
       return instance
     },
+    create(): Resource<C, D> {
+      const resource =
+        typeof factory === 'function' ? factory(...args$.value) : factory
+      return createInstance(resource)
+    },
   }
 
   return instance
+}
+
+export function broadcast(type: string, value: any): void {
+  const all = Array.from(__ALL_RESOURCES)
+  const [id, event] = type.split(':')
+
+  if (!event) all.forEach(resource => resource.emit(type, value))
+  const resources = all.filter(resource => resource.__id === id)
+  resources.forEach(resource => resource.emit(event, value))
 }

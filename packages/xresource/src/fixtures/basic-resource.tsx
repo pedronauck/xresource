@@ -22,5 +22,15 @@ export default createResource<Context, Data>({
     changeFoo: (_, foo) => {
       _.setContext({ foo })
     },
+    changeDoubleFoo: (_, foo) => {
+      _.setContext({ foo: foo + _.getContext().foo })
+    },
+  },
+  on: {
+    SET_FOO: 'changeFoo',
+    SET_DOUBLE_FOO: ['changeFoo', 'changeDoubleFoo'],
+    SET_PURE_FOO: (_, foo) => {
+      _.setContext({ foo })
+    },
   },
 })

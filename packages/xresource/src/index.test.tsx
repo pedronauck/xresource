@@ -2,19 +2,11 @@ import { createResource } from './'
 import BasicResource from './fixtures/basic-resource'
 
 const setupBasicInstance = () => {
-  const instance = BasicResource.read()
-  instance.start()
+  const instance = BasicResource.create()
   return instance
 }
 
 describe('context', () => {
-  test('throw if is not started', async () => {
-    const instance = BasicResource.read()
-
-    const fn = () => instance.setContext({ foo: 'bar' })
-    expect(fn).toThrow()
-  })
-
   test('with initial arguments', async () => {
     const resource = createResource(foo => ({
       context: {
@@ -25,11 +17,7 @@ describe('context', () => {
       },
     }))
 
-    const instance = resource
-      .with('foo')
-      .read()
-      .start()
-
+    const instance = resource.with('foo').create()
     expect(instance.getContext()).toEqual({ foo: 'foo' })
     instance.setContext({ foo: 'bar' })
     expect(instance.getContext()).toEqual({ foo: 'bar' })
@@ -96,7 +84,7 @@ describe('data', () => {
     instance.setContext({ foo: 'bar' })
     expect(instance.getData()).toEqual({})
 
-    await instance.load()
+    await instance.read()
     expect(instance.getData()).toEqual({
       bar: 'barbar',
     })
@@ -105,7 +93,7 @@ describe('data', () => {
   test('update on context change', async () => {
     const instance = setupBasicInstance()
 
-    await instance.load()
+    await instance.read()
     expect(instance.getData()).toEqual({
       bar: 'foobar',
     })
@@ -120,7 +108,7 @@ describe('data', () => {
     const { data$, ...instance } = setupBasicInstance()
     const spy = jest.spyOn(data$, 'next')
 
-    await instance.load()
+    await instance.read()
     expect(instance.getData()).toEqual({ bar: 'foobar' })
     instance.setContext({ foo: 'foo' })
     expect(spy).toBeCalledTimes(1)
@@ -130,7 +118,7 @@ describe('data', () => {
     const { data$, ...instance } = setupBasicInstance()
     const spy = jest.spyOn(data$, 'next')
 
-    await instance.load()
+    await instance.read()
     instance.setData(prev => ({ bar: prev.bar + 'foo' }))
     expect(spy).toBeCalledTimes(2)
     expect(instance.getData()).toEqual({ bar: 'foobarfoo' })
@@ -145,9 +133,8 @@ describe('data', () => {
       },
     })
 
-    const instance = resource.read()
-    instance.start()
-    await instance.load()
+    const instance = resource.create()
+    await instance.read()
     expect(instance.getError().bar).toBeInstanceOf(Error)
     expect(instance.getData().bar).toBeNull()
   })
@@ -156,7 +143,7 @@ describe('data', () => {
     const instance = setupBasicInstance()
 
     instance.setContext({ foo: 'bar' })
-    await instance.load()
+    await instance.read()
     expect(instance.getData()).toEqual({
       bar: 'barbar',
     })
@@ -169,17 +156,16 @@ describe('data', () => {
   })
 
   test('resource listeners', async () => {
-    const instance = BasicResource.read()
+    const instance = BasicResource.create()
     const startFn = jest.fn(() => null)
     const doneFn = jest.fn(() => null)
 
-    instance.start()
-    instance.onUpdateStart(startFn)
-    instance.onUpdateDone(doneFn)
+    instance.onReadStart(startFn)
+    instance.onReadDone(doneFn)
     instance.setContext({ foo: 'bar' })
     instance.setContext({ foo: 'foo' })
 
-    await instance.load()
+    await instance.read()
 
     expect(startFn).toBeCalled()
     expect(startFn).toBeCalledTimes(1)
@@ -187,5 +173,50 @@ describe('data', () => {
     expect(doneFn).toBeCalled()
     expect(doneFn).toBeCalledTimes(3)
     expect(doneFn).toBeCalledWith({ bar: 'foobar' }, {})
+  })
+})
+
+describe('communication', () => {
+  test('emit using string', () => {
+    const instance = BasicResource.create()
+    instance.emit('SET_FOO', 'bar')
+    expect(instance.getContext()).toEqual({ foo: 'bar' })
+  })
+
+  test('emit using array', () => {
+    const instance = BasicResource.create()
+    instance.emit('SET_DOUBLE_FOO', 'bar')
+    expect(instance.getContext()).toEqual({ foo: 'barbar' })
+  })
+
+  test('emit using an function', () => {
+    const instance = BasicResource.create()
+    instance.emit('SET_PURE_FOO', 'bar')
+    expect(instance.getContext()).toEqual({ foo: 'bar' })
+  })
+
+  test('broadcast for all resource', () => {
+    const instanceX = BasicResource.create()
+    const instanceY = BasicResource.create()
+
+    instanceX.broadcast('SET_FOO', 'bar')
+    expect(instanceX.getContext()).toEqual({ foo: 'bar' })
+    expect(instanceY.getContext()).toEqual({ foo: 'bar' })
+  })
+
+  test('broadcast for specific resource', () => {
+    const instance = BasicResource.create()
+    const testInstance = createResource({
+      id: 'test',
+      data: {
+        bar: () => 'bar',
+      },
+      on: {
+        SET_BAR: (_, bar) => _.setData({ bar }),
+      },
+    }).create()
+
+    instance.broadcast('test:SET_BAR', 'foo')
+    expect(testInstance.getData()).toEqual({ bar: 'foo' })
   })
 })

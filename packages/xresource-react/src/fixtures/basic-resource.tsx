@@ -21,12 +21,9 @@ export default createResource<Context, Data>({
       modifiers: [(ctx, bar) => ctx.foo + bar],
     },
   },
-  mutations: {
-    SET_FOO: (ctx, foo) => ({ ...ctx, foo }),
-  },
-  effects: {
-    changeFoo: (resource, foo) => {
-      resource.send('SET_FOO', foo)
+  handlers: {
+    changeFoo: (_, foo) => {
+      _.setContext({ foo })
     },
   },
 })
