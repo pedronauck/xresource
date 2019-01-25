@@ -24,6 +24,7 @@ const setCompleted = (todos, id) =>
   })
 
 export const TodosResource = createResource(() => ({
+  id: 'todos',
   context: {
     query: '',
     filter: 'all',
@@ -34,6 +35,11 @@ export const TodosResource = createResource(() => ({
       modifiers: [findByQuery, filterByFilter],
     },
   },
+  on: {
+    DELETE_ITEM: 'deleteItem',
+    COMPLETE_ITEM: 'completeItem',
+    CREATE_ITEM: 'createItem',
+  },
   handlers: {
     setFilter: (_, filter) => {
       _.setContext({ filter })
@@ -41,13 +47,13 @@ export const TodosResource = createResource(() => ({
     setQuery: (_, query) => {
       _.setContext({ query })
     },
-    deleteOnList: (_, id) => {
+    deleteItem: (_, id) => {
       _.setData(prev => ({ todos: deleteOnList(prev.todos, id) }))
     },
-    setCompleted: (_, id) => {
+    completeItem: (_, id) => {
       _.setData(prev => ({ todos: setCompleted(prev.todos, id) }))
     },
-    addOnList: (_, todo) => {
+    createItem: (_, todo) => {
       _.setData(prev => ({ todos: prev.todos.concat([todo]) }))
     },
   },

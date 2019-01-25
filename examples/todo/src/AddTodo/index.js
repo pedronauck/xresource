@@ -1,23 +1,18 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Flex, Box } from 'rebass'
 import { Button, Drawer, Input, Spin } from 'antd'
-import { on, emit } from 'kord'
+import { broadcast } from 'xresource'
 
 import * as api from '../api'
 
-export const AddTodo = () => {
-  const [showing, setShowing] = useState(false)
+export const AddTodo = ({ opened, close }) => {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    on('todo:open-modal', () => setShowing(true))
-  })
-
   const reset = () => {
     setSubmitting(false)
-    setShowing(false)
+    close()
     setTitle('')
     setBody('')
   }
@@ -25,7 +20,7 @@ export const AddTodo = () => {
   const handleSubmit = async () => {
     setSubmitting(true)
     const todo = await api.createTodo({ title, body, completed: false })
-    emit('todo:create-todo', todo)
+    broadcast('todos:CREATE_ITEM', todo)
     reset()
   }
 
@@ -33,9 +28,9 @@ export const AddTodo = () => {
     <Drawer
       width={400}
       title="Creating Todo"
-      visible={showing}
+      visible={opened}
       closable={!submitting}
-      onClose={() => setShowing(false)}
+      onClose={close}
     >
       {submitting ? (
         <Spin />

@@ -1,6 +1,5 @@
 import { message } from 'antd'
 import { createResource } from 'xresource'
-import { emit } from 'kord'
 
 import * as api from '../api'
 
@@ -25,9 +24,9 @@ export const TodoResource = createResource(item => ({
         return
       }
 
-      await _.load()
+      await _.read()
       _.setContext({
-        loaded: false,
+        loaded: true,
         showing: true,
       })
     },
@@ -36,15 +35,15 @@ export const TodoResource = createResource(item => ({
     },
     completeTodo: async (_, id, completed) => {
       _.setContext({ completing: true })
-      emit('todo:item-completed', id)
       await api.updateTodo(id, { completed })
       _.setContext({ completing: false })
+      _.broadcast('todos:COMPLETE_ITEM', id)
     },
     deleteTodo: async (_, id) => {
       _.setContext({ deleting: true })
       await api.deleteTodo(id)
       _.setContext({ deleting: false })
-      emit('todo:item-deleted', id)
+      _.broadcast('todos:DELETE_ITEM', id)
       message.success('Successfully deleted')
     },
   },

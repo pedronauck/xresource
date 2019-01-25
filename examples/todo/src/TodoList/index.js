@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { useResource } from '@xresource/react'
 import { Flex, Box } from 'rebass'
 import { List } from 'antd'
-import { on } from 'kord'
 import styled from 'styled-components'
 
 import { Topbar } from './Topbar'
@@ -18,14 +17,8 @@ const Wrapper = styled(Box)`
   margin: 0 auto;
 `
 
-export const TodoList = ({ renderItem }) => {
+export const TodoList = ({ renderItem, onCreate }) => {
   const { ctx, data, loading, handlers } = useResource(TodosResource)
-
-  useEffect(() => {
-    on('todo:item-deleted', handlers.deleteOnList)
-    on('todo:item-completed', handlers.setCompleted)
-    on('todo:create-todo', handlers.addOnList)
-  }, [])
 
   return (
     <Flex py={4}>
@@ -35,6 +28,7 @@ export const TodoList = ({ renderItem }) => {
           <Topbar
             filter={ctx.filter}
             query={ctx.query}
+            onCreate={onCreate}
             onSearch={handlers.setQuery}
             onFilter={handlers.setFilter}
           />

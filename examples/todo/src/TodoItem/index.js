@@ -38,7 +38,7 @@ const DeleteButton = ({ onClick, onConfirm }) => (
 
 export const TodoItem = ({ item }) => {
   const resource = useResource(TodoResource.with(item), {
-    updateOnRead: false,
+    readOnMount: false,
   })
 
   const { ctx, data, loading, handlers } = resource

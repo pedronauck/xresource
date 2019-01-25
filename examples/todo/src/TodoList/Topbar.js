@@ -1,11 +1,10 @@
 import React from 'react'
 import { Flex, Box } from 'rebass'
 import { Button, Input, Radio } from 'antd'
-import { emit } from 'kord'
 
 const RadioGroup = Radio.Group
 
-export const Topbar = ({ query, onSearch, filter, onFilter }) => (
+export const Topbar = ({ query, onSearch, filter, onFilter, onCreate }) => (
   <Flex justifyContent="space-between" alignItems="center">
     <Box width={200}>
       <Input
@@ -20,12 +19,7 @@ export const Topbar = ({ query, onSearch, filter, onFilter }) => (
         <Radio value="completed">Completed</Radio>
       </RadioGroup>
     </Flex>
-    <Button
-      type="primary"
-      onClick={() => emit('todo:open-modal')}
-      size="small"
-      icon="plus"
-    >
+    <Button type="primary" size="small" icon="plus" onClick={onCreate}>
       Create
     </Button>
   </Flex>
