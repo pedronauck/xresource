@@ -1,4 +1,4 @@
-import { BehaviorSubject } from 'rxjs'
+import { Subject, BehaviorSubject } from 'rxjs'
 import deepEqual from 'fast-deep-equal'
 import memoize from 'memoize-one'
 
@@ -30,8 +30,9 @@ export interface DataItemObj<C, D> {
 export type DataMap<C, D> = Record<string, SourceFn<C, D> | DataItemObj<C, D>>
 export type ErrorMap<D> = Record<keyof D, Error>
 
-export type StartListener = () => void
-export type DoneListener<D> = (data: D, error: ErrorMap<D>) => void
+export type NextListener = () => void
+export type CompleteListener<D> = (data: D) => void
+export type ErrorListener<D> = (error: ErrorMap<D>) => void
 
 export interface UpdateOpts {
   async?: boolean
@@ -66,11 +67,17 @@ export interface Resource<C, D> {
   setData(next: Updater<D> | Partial<D>): void
   emit(type: string, value: any): void
   broadcast(type: string, value: any): void
-  onReadStart(listener: StartListener): () => void
-  onReadDone(listener: DoneListener<D>): () => void
+  onReadStart(listener: NextListener): void
+  onReadError(listener: ErrorListener<D>): void
+  onReadNext(listener: CompleteListener<D>): void
 }
 
-const __ALL_RESOURCES = new Set<Resource<any, any>>()
+export interface BroadcastPayload {
+  event: string
+  payload: any
+}
+
+const __BROADCAST = new Subject<BroadcastPayload>()
 const isStr = (val: any) => typeof val === 'string'
 
 function get<T>(obj: any, key: string): T {
@@ -100,6 +107,12 @@ function modify<C, D>(modifiers: Array<Modifier<C, D>>, ctx: C, data: D): D {
     : data
 }
 
+function updateSubject<T>(subject: BehaviorSubject<T>, next: T): boolean {
+  const isEqual = deepEqual(subject.value, next)
+  if (!isEqual) subject.next(next)
+  return isEqual
+}
+
 function createInstance<C = any, D = any>({
   id: __id,
   data: dataDescriptor,
@@ -111,30 +124,14 @@ function createInstance<C = any, D = any>({
   const context$ = new BehaviorSubject<C>({} as C)
   const pureData$ = new BehaviorSubject<D>({} as D)
   const error$ = new BehaviorSubject<ErrorMap<D>>({} as ErrorMap<D>)
-  const startListeners = new Set<StartListener>()
-  const doneListeners = new Set<DoneListener<D>>()
+  const nextListeners = new Subject()
+  const broadcast$ = __BROADCAST.asObservable()
 
   const setInitial = () => {
     context$.next(initialContext || ({} as C))
     pureData$.next({} as D)
     data$.next({} as D)
     error$.next({} as ErrorMap<D>)
-    startListeners.clear()
-    doneListeners.clear()
-  }
-
-  const runStartListeners = () => {
-    startListeners.forEach(listener => listener())
-  }
-
-  const runDoneListeners = () => {
-    doneListeners.forEach(listener => listener(data$.value, error$.value))
-  }
-
-  function updateSubject<T>(subject: BehaviorSubject<T>, next: T): boolean {
-    const isEqual = deepEqual(subject.value, next)
-    if (!isEqual) subject.next(next)
-    return isEqual
   }
 
   const handlers = reduceHandlers<C, D>(
@@ -142,7 +139,7 @@ function createInstance<C = any, D = any>({
     handler => (...args: any[]) => handler(resource, ...args)
   )
 
-  function invokeHandler<T>(
+  function invokeUsingHandler<T>(
     invoker: HandlerInvoker<C, D>,
     ...args: any[]
   ): void {
@@ -173,12 +170,12 @@ function createInstance<C = any, D = any>({
     const pureDataMap = new Map<string, any>(entries)
     const errorMap = new Map<string, any>()
 
-    runStartListeners()
+    nextListeners.next()
     for (const [key, entry] of entries) {
       try {
         if (entry && typeof entry !== 'function' && entry.source) {
           const { source, modifiers = [], onNext, onSuccess } = entry
-          onNext && (await invokeHandler(onNext))
+          onNext && (await invokeUsingHandler(onNext))
 
           const ctxValue = context$.value
           const pureData = await source(ctxValue, mapToObject(dataMap) as D)
@@ -187,7 +184,7 @@ function createInstance<C = any, D = any>({
 
           dataMap.set(key, data)
           pureDataMap.set(key, pureData)
-          onSuccess && (await invokeHandler(onSuccess, data))
+          onSuccess && (await invokeUsingHandler(onSuccess, data))
         }
         if (typeof entry === 'function') {
           const ctxValue = context$.value
@@ -202,8 +199,8 @@ function createInstance<C = any, D = any>({
 
         if (typeof entry !== 'function') {
           const { onError, onSuccess } = entry
-          onError && (await invokeHandler<Error>(onError, err))
-          onSuccess && (await invokeHandler(onSuccess, null))
+          onError && (await invokeUsingHandler<Error>(onError, err))
+          onSuccess && (await invokeUsingHandler(onSuccess, null))
         }
       }
     }
@@ -214,12 +211,8 @@ function createInstance<C = any, D = any>({
 
     if (Object.keys(nextData).length > 0) {
       updateSubject<D>(pureData$, nextPureData)
-      const dataEqual = updateSubject<D>(data$, mapToObject(dataMap))
-      const errorEqual = updateSubject<ErrorMap<D>>(error$, nextError)
-
-      if (!dataEqual || !errorEqual) {
-        runDoneListeners()
-      }
+      updateSubject<D>(data$, mapToObject(dataMap))
+      updateSubject<ErrorMap<D>>(error$, nextError)
     }
   }
 
@@ -239,17 +232,27 @@ function createInstance<C = any, D = any>({
         const memoizedModifiers = modifiers.map(modifier => memoize(modifier))
         const data =
           pureData && modify<C, D>(memoizedModifiers, ctxValue, pureData as D)
-
         dataMap.set(key, data)
       }
     }
 
-    const next = mapToObject(dataMap)
-    if (Object.keys(next).length > 0) {
+    const nextData = mapToObject(dataMap)
+    if (Object.keys(nextData).length > 0) {
       updateSubject<D>(data$, mapToObject(dataMap))
-      runDoneListeners()
     }
   }
+
+  /**
+   * This method make a subscribe to __BROADCAST subject transformed
+   * into an observable in order to emit an event when broadcast.
+   * @return Subscription
+   */
+  const broadcastSub = broadcast$.subscribe(({ event, payload }) => {
+    const [id, type] = event.split(':')
+
+    if (!type) resource.emit(id, payload)
+    if (id && type && id === __id) resource.emit(type, payload)
+  })
 
   const resource: Resource<C, D> = {
     __id,
@@ -275,9 +278,8 @@ function createInstance<C = any, D = any>({
       context$.unsubscribe()
       data$.unsubscribe()
       error$.unsubscribe()
-      startListeners.clear()
-      doneListeners.clear()
-      __ALL_RESOURCES.delete(resource)
+      nextListeners.unsubscribe()
+      broadcastSub.unsubscribe()
       return resource
     },
 
@@ -312,22 +314,23 @@ function createInstance<C = any, D = any>({
       const select = on[type]
 
       if (!select) return
-      invokeHandler<typeof value>(select, value)
+      invokeUsingHandler<typeof value>(select, value)
     },
 
-    onReadStart(listener: StartListener): () => void {
-      startListeners.add(listener)
-      return () => startListeners.delete(listener)
+    onReadStart(listener): void {
+      nextListeners.subscribe(listener)
     },
 
-    onReadDone(listener: DoneListener<D>): () => void {
-      doneListeners.add(listener)
-      return () => doneListeners.delete(listener)
+    onReadNext(listener): void {
+      data$.subscribe(listener)
+    },
+
+    onReadError(listener): void {
+      error$.subscribe(listener)
     },
   }
 
   setInitial()
-  __ALL_RESOURCES.add(resource)
   return resource
 }
 
@@ -359,11 +362,6 @@ export function createResource<C = DefaultContext, D = DefaultData>(
   return instance
 }
 
-export function broadcast(type: string, value: any): void {
-  const all = Array.from(__ALL_RESOURCES)
-  const [id, event] = type.split(':')
-
-  if (!event) all.forEach(resource => resource.emit(type, value))
-  const resources = all.filter(resource => resource.__id === id)
-  resources.forEach(resource => resource.emit(event, value))
+export function broadcast(event: string, payload: any): void {
+  __BROADCAST.next({ event, payload })
 }

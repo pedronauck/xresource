@@ -156,13 +156,15 @@ describe('data', () => {
     })
   })
 
-  test('resource listeners', async () => {
+  test('resource callbacks', async () => {
     const instance = BasicResource.create()
     const startFn = jest.fn(() => null)
-    const doneFn = jest.fn(() => null)
+    const nextFn = jest.fn(() => null)
+    const errorFn = jest.fn(() => null)
 
     instance.onReadStart(startFn)
-    instance.onReadDone(doneFn)
+    instance.onReadNext(nextFn)
+    instance.onReadError(errorFn)
     instance.setContext({ foo: 'bar' })
     instance.setContext({ foo: 'foo' })
 
@@ -170,10 +172,11 @@ describe('data', () => {
 
     expect(startFn).toBeCalled()
     expect(startFn).toBeCalledTimes(1)
-    expect(startFn).toBeCalledWith()
-    expect(doneFn).toBeCalled()
-    expect(doneFn).toBeCalledTimes(3)
-    expect(doneFn).toBeCalledWith({ bar: 'foobar' }, {})
+    expect(startFn).toBeCalledWith(undefined)
+    expect(nextFn).toBeCalled()
+    expect(nextFn).toBeCalledTimes(3)
+    expect(nextFn).toBeCalledWith({ bar: 'foobar' })
+    expect(errorFn).toBeCalledWith({})
   })
 
   describe('handlers', () => {

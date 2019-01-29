@@ -17,7 +17,7 @@ export function useResource<C = any, D = any>(
   opts: UseResourceOpts<C, D> = { readOnMount: true }
 ): UseResource<C, D> {
   const [resource] = useState(() => instance.create())
-  const { context$, data$, error$, onReadDone, onReadStart } = resource
+  const { context$, data$, error$, onReadNext, onReadStart } = resource
   const readOnMount =
     typeof opts.readOnMount === 'function'
       ? opts.readOnMount(resource)
@@ -33,7 +33,7 @@ export function useResource<C = any, D = any>(
     data$.subscribe(setData)
     error$.subscribe(setError)
     onReadStart(() => setLoading(true))
-    onReadDone(() => setLoading(false))
+    onReadNext(() => setLoading(false))
     readOnMount && resource.read()
     return () => {
       resource.stop()
