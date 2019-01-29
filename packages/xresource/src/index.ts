@@ -2,9 +2,6 @@ import { BehaviorSubject } from 'rxjs'
 import deepEqual from 'fast-deep-equal'
 import memoize from 'memoize-one'
 
-const __ALL_RESOURCES = new Set<Resource<any, any>>()
-const isStr = (val: any) => typeof val === 'string'
-
 export type Updater<C> = (prev: C) => C
 
 export type Handler<C, D> = (
@@ -13,47 +10,68 @@ export type Handler<C, D> = (
 ) => void | Promise<void>
 
 export type Handlers<C, D> = Record<string, Handler<C, D>>
+export type HandlerInvoker<C, D> = string | string[] | Handler<C, D>
 export type PureHandlers = Record<
   string,
   (...args: any[]) => void | Promise<void>
 >
 
-export type SourceFn<C, D, T = any> = (
-  ctx: C,
-  data: Partial<D>
-) => Promise<T> | T
-export type Modifier<C = any, T = any> = (context: C, current: T) => T
+export type SourceFn<C, D> = (ctx: C, data: Partial<D>) => Promise<any> | any
+export type Modifier<C, D> = (context: C, current: D) => any
 
-export type DataItem<C = any, D = any> =
-  | {
-      source: SourceFn<C, D>
-      modifiers?: Array<Modifier<C>>
-    }
-  | SourceFn<C, D>
+export interface DataItemObj<C, D> {
+  source: SourceFn<C, D>
+  modifiers?: Array<Modifier<C, D>>
+  onNext?: HandlerInvoker<C, D>
+  onError?: HandlerInvoker<C, D>
+  onSuccess?: HandlerInvoker<C, D>
+}
 
-export type DataDescriptor<C, D> = Record<string, DataItem<C, D>>
+export type DataMap<C, D> = Record<string, SourceFn<C, D> | DataItemObj<C, D>>
 export type ErrorMap<D> = Record<keyof D, Error>
 
 export type StartListener = () => void
 export type DoneListener<D> = (data: D, error: ErrorMap<D>) => void
-export type ContextListener<C> = (ctx: C) => void
 
 export interface UpdateOpts {
   async?: boolean
 }
 
-export type EventMap<C, D> = Record<string, string | string[] | Handler<C, D>>
+export type EventMap<C, D> = Record<string, HandlerInvoker<C, D>>
 
 export interface Factory<C, D> {
   id?: string
-  data: DataDescriptor<C, D>
   context?: C
+  data: DataMap<C, D>
   handlers?: Handlers<C, D>
   on?: EventMap<C, D>
 }
 
 export type FactoryFn<C, D> = (...args: any[]) => Factory<C, D>
 export type ResourceFactory<C, D> = Factory<C, D> | FactoryFn<C, D>
+
+export interface Resource<C, D> {
+  __id?: string
+  handlers: PureHandlers
+  context$: BehaviorSubject<C>
+  data$: BehaviorSubject<D>
+  error$: BehaviorSubject<ErrorMap<D>>
+  getContext(): C
+  getData(): D
+  getError(): ErrorMap<D>
+  stop(): Resource<C, D>
+  read(): Promise<void>
+  reset(): Promise<void>
+  setContext(next: Updater<C> | Partial<C>): void
+  setData(next: Updater<D> | Partial<D>): void
+  emit(type: string, value: any): void
+  broadcast(type: string, value: any): void
+  onReadStart(listener: StartListener): () => void
+  onReadDone(listener: DoneListener<D>): () => void
+}
+
+const __ALL_RESOURCES = new Set<Resource<any, any>>()
+const isStr = (val: any) => typeof val === 'string'
 
 function get<T>(obj: any, key: string): T {
   return obj[key]
@@ -76,32 +94,10 @@ function reduceHandlers<C, D>(
   }, {})
 }
 
-const modify = memoize(
-  (modifiers: Modifier[], ctx: any, result: any) =>
-    Array.isArray(modifiers)
-      ? modifiers.reduce((obj, modifier) => modifier(ctx, obj), result)
-      : result,
-  deepEqual
-)
-
-export interface Resource<C, D> {
-  __id?: string
-  handlers: PureHandlers
-  context$: BehaviorSubject<C>
-  data$: BehaviorSubject<D>
-  error$: BehaviorSubject<ErrorMap<D>>
-  getContext(): C
-  getData(): D
-  getError(): ErrorMap<D>
-  stop(): Resource<C, D>
-  read(): Promise<void>
-  reset(): Promise<void>
-  setContext(next: Updater<C> | Partial<C>): void
-  setData(next: Updater<D> | Partial<D>): void
-  emit(type: string, value: any): void
-  broadcast(type: string, value: any): void
-  onReadStart(listener: StartListener): () => void
-  onReadDone(listener: DoneListener<D>): () => void
+function modify<C, D>(modifiers: Array<Modifier<C, D>>, ctx: C, data: D): D {
+  return Array.isArray(modifiers)
+    ? modifiers.reduce((obj, modifier) => modifier(ctx, obj), data)
+    : data
 }
 
 function createInstance<C = any, D = any>({
@@ -141,6 +137,30 @@ function createInstance<C = any, D = any>({
     return isEqual
   }
 
+  const handlers = reduceHandlers<C, D>(
+    defaultHandlers,
+    handler => (...args: any[]) => handler(resource, ...args)
+  )
+
+  function invokeHandler<T>(
+    invoker: HandlerInvoker<C, D>,
+    ...args: any[]
+  ): void {
+    if (Array.isArray(invoker) && invoker.every(isStr)) {
+      invoker.forEach(name => {
+        const handler = handlers[name]
+        handler && handler(...args)
+      })
+    }
+    if (typeof invoker === 'string') {
+      const handler = handlers[invoker]
+      handler && handler(...args)
+    }
+    if (typeof invoker === 'function') {
+      invoker(resource, ...args)
+    }
+  }
+
   /**
    * this function will run after each async load()
    * but won't read when call setContext() or dispatch()
@@ -148,7 +168,6 @@ function createInstance<C = any, D = any>({
   const updateAsync = async () => {
     if (!dataDescriptor) return
 
-    const ctxValue = context$.value
     const entries = Object.entries(dataDescriptor || {})
     const dataMap = new Map<string, any>(entries)
     const pureDataMap = new Map<string, any>(entries)
@@ -158,14 +177,20 @@ function createInstance<C = any, D = any>({
     for (const [key, entry] of entries) {
       try {
         if (entry && typeof entry !== 'function' && entry.source) {
-          const { source, modifiers } = entry
+          const { source, modifiers = [], onNext, onSuccess } = entry
+          onNext && (await invokeHandler(onNext))
+
+          const ctxValue = context$.value
           const pureData = await source(ctxValue, mapToObject(dataMap) as D)
-          const data = modify(modifiers || [], ctxValue, pureData)
+          const memoizedModifiers = modifiers.map(modifier => memoize(modifier))
+          const data = modify<C, D>(memoizedModifiers, ctxValue, pureData as D)
 
           dataMap.set(key, data)
           pureDataMap.set(key, pureData)
+          onSuccess && (await invokeHandler(onSuccess, data))
         }
         if (typeof entry === 'function') {
+          const ctxValue = context$.value
           const result = await entry(ctxValue, mapToObject(dataMap) as D)
           dataMap.set(key, result)
           pureDataMap.set(key, result)
@@ -174,6 +199,12 @@ function createInstance<C = any, D = any>({
         dataMap.set(key, null)
         pureDataMap.set(key, null)
         errorMap.set(key, err)
+
+        if (typeof entry !== 'function') {
+          const { onError, onSuccess } = entry
+          onError && (await invokeHandler<Error>(onError, err))
+          onSuccess && (await invokeHandler(onSuccess, null))
+        }
       }
     }
 
@@ -203,8 +234,12 @@ function createInstance<C = any, D = any>({
 
     for (const [key, entry] of entries) {
       if (typeof entry !== 'function' && Array.isArray(entry.modifiers)) {
+        const { modifiers = [] } = entry
         const pureData = get(pureData$.value, key)
-        const data = pureData && modify(entry.modifiers, ctxValue, pureData)
+        const memoizedModifiers = modifiers.map(modifier => memoize(modifier))
+        const data =
+          pureData && modify<C, D>(memoizedModifiers, ctxValue, pureData as D)
+
         dataMap.set(key, data)
       }
     }
@@ -215,11 +250,6 @@ function createInstance<C = any, D = any>({
       runDoneListeners()
     }
   }
-
-  const handlers = reduceHandlers<C, D>(
-    defaultHandlers,
-    handler => (...args: any[]) => handler(resource, ...args)
-  )
 
   const resource: Resource<C, D> = {
     __id,
@@ -282,19 +312,7 @@ function createInstance<C = any, D = any>({
       const select = on[type]
 
       if (!select) return
-      if (Array.isArray(select) && select.every(isStr)) {
-        select.forEach(name => {
-          const handler = handlers[name]
-          handler && handler(value)
-        })
-      }
-      if (typeof select === 'function') {
-        select(resource, value)
-      }
-      if (typeof select === 'string') {
-        const handler = handlers[select]
-        handler && handler(value)
-      }
+      invokeHandler<typeof value>(select, value)
     },
 
     onReadStart(listener: StartListener): () => void {

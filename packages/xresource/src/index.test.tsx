@@ -36,6 +36,7 @@ describe('context', () => {
     expect(dataNext).toBeCalledTimes(1)
     expect(errorNext).not.toBeCalled()
     expect(instance.getContext()).toEqual({ foo: 'bar' })
+    expect(instance.getData()).toEqual({ bar: undefined })
   })
 
   test('using multiple instance', async () => {
@@ -174,6 +175,111 @@ describe('data', () => {
     expect(doneFn).toBeCalledTimes(3)
     expect(doneFn).toBeCalledWith({ bar: 'foobar' }, {})
   })
+
+  describe('handlers', () => {
+    test('onNext()', async () => {
+      const nextHandler = jest.fn(() => null)
+      const Resource = createResource({
+        data: {
+          bar: {
+            source: () => 'bar',
+            onNext: nextHandler,
+          },
+        },
+      })
+
+      const instance = Resource.create()
+      await instance.read()
+      expect(nextHandler).toBeCalled()
+      expect(nextHandler.mock.calls[0][1]).toBe(undefined)
+    })
+
+    test('onError()', async () => {
+      const errorHandler = jest.fn(() => null)
+      const Resource = createResource({
+        data: {
+          bar: {
+            source: () => {
+              throw new Error('Oops')
+            },
+            onError: errorHandler,
+          },
+        },
+      })
+
+      const instance = Resource.create()
+      await instance.read()
+      expect(errorHandler).toBeCalled()
+      expect(errorHandler.mock.calls[0][1]).toBeInstanceOf(Error)
+    })
+
+    test('onSuccess()', async () => {
+      const successHandler = jest.fn(() => null)
+      const Resource = createResource({
+        data: {
+          bar: {
+            source: () => 'bar',
+            onSuccess: successHandler,
+          },
+        },
+      })
+
+      const instance = Resource.create()
+      await instance.read()
+      expect(successHandler).toBeCalled()
+      expect(successHandler.mock.calls[0][1]).toBe('bar')
+    })
+
+    test('data property with listeners', async () => {
+      const nextHandler = jest.fn(value => null)
+      const errorHandler = jest.fn(err => null)
+      const successHandler = jest.fn(() => null)
+
+      const ErrorResource = createResource({
+        data: {
+          foo: {
+            onNext: nextHandler,
+            onError: errorHandler,
+            onSuccess: successHandler,
+            source: () => {
+              throw new Error('Oops!')
+            },
+          },
+        },
+      })
+
+      const instance = ErrorResource.create()
+      await instance.read()
+
+      expect(nextHandler).toBeCalled()
+      expect(successHandler).toBeCalled()
+      expect(successHandler.mock.calls[0][1]).toBe(null)
+      expect(errorHandler.mock.calls[0][1]).toBeInstanceOf(Error)
+      expect(errorHandler.mock.calls[0][1].message).toEqual('Oops!')
+      expect(instance.getError().foo.message).toEqual('Oops!')
+    })
+
+    test('data event appointing to a handler', async () => {
+      const Resource = createResource({
+        context: {
+          foo: 'foo',
+        },
+        data: {
+          bar: {
+            onNext: 'setFoo',
+            source: ctx => ctx.foo + 'bar',
+          },
+        },
+        handlers: {
+          setFoo: _ => _.setContext({ foo: 'bar' }),
+        },
+      })
+
+      const instance = Resource.create()
+      await instance.read()
+      expect(instance.getData().bar).toEqual('barbar')
+    })
+  })
 })
 
 describe('communication', () => {
@@ -206,7 +312,8 @@ describe('communication', () => {
 
   test('broadcast for specific resource', () => {
     const instance = BasicResource.create()
-    const testInstance = createResource({
+
+    const Resource = createResource({
       id: 'test',
       data: {
         bar: () => 'bar',
@@ -214,8 +321,9 @@ describe('communication', () => {
       on: {
         SET_BAR: (_, bar) => _.setData({ bar }),
       },
-    }).create()
+    })
 
+    const testInstance = Resource.create()
     instance.broadcast('test:SET_BAR', 'foo')
     expect(testInstance.getData()).toEqual({ bar: 'foo' })
   })
