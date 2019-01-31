@@ -17,18 +17,26 @@ export type PureHandlers = Record<
   (...args: any[]) => void | Promise<void>
 >
 
-export type SourceFn<C, D> = (ctx: C, data: Partial<D>) => Promise<any> | any
+export type SourceFn<C, D, T> = (
+  ctx: C,
+  data: Partial<D>,
+  client: T
+) => Promise<any> | any
 export type Modifier<C, D> = (context: C, current: D) => any
 
-export interface DataItemObj<C, D> {
-  source: SourceFn<C, D>
+export interface DataItemObj<C, D, T> {
+  source: SourceFn<C, D, T>
   modifiers?: Array<Modifier<C, D>>
   onNext?: HandlerInvoker<C, D>
   onError?: HandlerInvoker<C, D>
   onSuccess?: HandlerInvoker<C, D>
 }
 
-export type DataMap<C, D> = Record<string, DataItemObj<C, D> | SourceFn<C, D>>
+export type DataMap<C, D, T> = Record<
+  string,
+  DataItemObj<C, D, T> | SourceFn<C, D, T>
+>
+
 export type ErrorMap<D> = Record<keyof D, Error>
 
 export type NextListener = () => void
@@ -41,15 +49,15 @@ export interface UpdateOpts {
 
 export type EventMap<C, D> = Record<string, HandlerInvoker<C, D>>
 
-export interface Factory<C, D> {
+export interface Factory<C, D, T = any> {
   id?: string
   context?: C
-  data: DataMap<C, D>
+  data: DataMap<C, D, T>
   handlers?: Handlers<C, D>
   on?: EventMap<C, D>
 }
 
-export type FactoryFn<C, D> = (...args: any[]) => Factory<C, D>
+export type FactoryFn<C, D, T = any> = (...args: any[]) => Factory<C, D, T>
 export type ResourceFactory<C, D> = Factory<C, D> | FactoryFn<C, D>
 
 export interface Resource<C, D> {
@@ -114,13 +122,18 @@ function updateSubject<T>(subject: BehaviorSubject<T>, next: T): boolean {
   return isEqual
 }
 
-function createInstance<C = any, D = any>({
-  id: __id,
-  data: dataDescriptor,
-  context: initialContext,
-  handlers: defaultHandlers = {},
-  on = {},
-}: Factory<C, D>): Resource<C, D> {
+function createInstance<C = any, D = any, T = any>(
+  factory: Factory<C, D, T>,
+  client: T
+): Resource<C, D> {
+  const {
+    id: __id,
+    data: dataDescriptor,
+    context: initialContext,
+    handlers: defaultHandlers = {},
+    on = {},
+  } = factory
+
   const data$ = new BehaviorSubject<D>({} as D)
   const context$ = new BehaviorSubject<C>({} as C)
   const pureData$ = new BehaviorSubject<D>({} as D)
@@ -175,7 +188,8 @@ function createInstance<C = any, D = any>({
             onNext && (await invokeUsingHandler(onNext))
 
             const ctxValue = context$.value
-            const pureData = await source(ctxValue, mapToObject(dataMap) as D)
+            const newData = mapToObject(dataMap) as D
+            const pureData = await source(ctxValue, newData, client)
             const memoized = modifiers.map(modifier => memoize(modifier))
             const data = modify<C, D>(memoized, ctxValue, pureData as D)
 
@@ -185,7 +199,8 @@ function createInstance<C = any, D = any>({
           }
           if (typeof entry === 'function') {
             const ctxValue = context$.value
-            const data = await entry(ctxValue, mapToObject(dataMap) as D)
+            const newData = mapToObject(dataMap) as D
+            const data = await entry(ctxValue, newData, client)
 
             dataMap.set(key, data)
             pureDataMap.set(key, data)
@@ -245,7 +260,7 @@ function createInstance<C = any, D = any>({
         const hasModifers = Array.isArray((entry as any).modifiers)
 
         if (!hasModifers) return [key, pure]
-        const { modifiers = [] } = entry as DataItemObj<C, D>
+        const { modifiers = [] } = entry as DataItemObj<C, D, T>
         const memoized = modifiers.map(modifier => memoize(modifier))
         return pure && [key, modify<C, D>(memoized, ctx, pure as D)]
       })
@@ -300,10 +315,8 @@ function createInstance<C = any, D = any>({
 
     setContext(value): void {
       const context = context$.value
-      const next =
-        typeof value === 'function' ? value(context) : { ...context, ...value }
-
-      updateSubject<C>(context$, next)
+      const next = typeof value === 'function' ? value(context) : value
+      updateSubject<C>(context$, { ...context, ...next })
     },
 
     setData(value): void {
@@ -340,8 +353,8 @@ function createInstance<C = any, D = any>({
 }
 
 export interface ResourceInstance<C, D> {
-  create: () => Resource<C, D>
-  with: (...args: any[]) => ResourceInstance<C, D>
+  with(...args: any[]): ResourceInstance<C, D>
+  create<T>(client: T): Resource<C, D>
 }
 
 export type DefaultContext = Record<string, any>
@@ -357,10 +370,10 @@ export function createResource<C = DefaultContext, D = DefaultData>(
       args$.next(args)
       return instance
     },
-    create(): Resource<C, D> {
+    create<T>(client: T): Resource<C, D> {
       const resource =
         typeof factory === 'function' ? factory(...args$.value) : factory
-      return createInstance(resource)
+      return createInstance<C, D, T>(resource, client)
     },
   }
 

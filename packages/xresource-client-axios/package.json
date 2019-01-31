@@ -1,0 +1,33 @@
+{
+  "name": "@xresource/client-axios",
+  "version": "0.0.2",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "cross-env NODE_ENV=test jest",
+    "test:watch": "yarn test --watchAll",
+    "dev": "cross-env NODE_ENV=development rollup -c -w",
+    "build": "cross-env NODE_ENV=production rollup -c",
+    "fix": "run-s fix:*",
+    "fix:prettier": "prettier \"src/**/*.{ts,tsx,md,mdx,js,jsx,json}\" --write",
+    "fix:tslint": "tslint --fix --project .",
+    "tslint": "tslint --project ."
+  },
+  "dependencies": {
+    "axios": "^0.18.0",
+    "deepmerge": "^3.1.0"
+  },
+  "devDependencies": {
+    "react-testing-library": "^5.4.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
