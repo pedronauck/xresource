@@ -1,4 +1,5 @@
-import { Subject, BehaviorSubject } from 'rxjs'
+import { Subject, BehaviorSubject, combineLatest, of } from 'rxjs'
+import { tap, switchMap, filter, skipUntil, scan } from 'rxjs/operators'
 import deepEqual from 'fast-deep-equal'
 import memoize from 'memoize-one'
 
@@ -27,7 +28,7 @@ export interface DataItemObj<C, D> {
   onSuccess?: HandlerInvoker<C, D>
 }
 
-export type DataMap<C, D> = Record<string, SourceFn<C, D> | DataItemObj<C, D>>
+export type DataMap<C, D> = Record<string, DataItemObj<C, D> | SourceFn<C, D>>
 export type ErrorMap<D> = Record<keyof D, Error>
 
 export type NextListener = () => void
@@ -124,8 +125,9 @@ function createInstance<C = any, D = any>({
   const context$ = new BehaviorSubject<C>({} as C)
   const pureData$ = new BehaviorSubject<D>({} as D)
   const error$ = new BehaviorSubject<ErrorMap<D>>({} as ErrorMap<D>)
-  const nextListeners = new Subject()
   const broadcast$ = __BROADCAST.asObservable()
+  const nextListeners = new Subject()
+  const fetchAsync = new Subject()
 
   const setInitial = () => {
     context$.next(initialContext || ({} as C))
@@ -158,88 +160,65 @@ function createInstance<C = any, D = any>({
     }
   }
 
-  /**
-   * this function will run after each async load()
-   * but won't read when call setContext() or dispatch()
-   */
+  const entries$ = of(Object.entries(dataDescriptor || {}))
+  const dataAsync$ = entries$.pipe(
+    tap(() => nextListeners.next()),
+    switchMap(async entries => {
+      const dataMap = new Map<string, any>(entries)
+      const pureDataMap = new Map<string, any>(entries)
+      const errorMap = new Map()
+
+      for (const [key, entry] of entries) {
+        try {
+          if (entry && typeof entry !== 'function' && entry.source) {
+            const { source, modifiers = [], onNext, onSuccess } = entry
+            onNext && (await invokeUsingHandler(onNext))
+
+            const ctxValue = context$.value
+            const pureData = await source(ctxValue, mapToObject(dataMap) as D)
+            const memoized = modifiers.map(modifier => memoize(modifier))
+            const data = modify<C, D>(memoized, ctxValue, pureData as D)
+
+            dataMap.set(key, data)
+            pureDataMap.set(key, pureData)
+            onSuccess && (await invokeUsingHandler(onSuccess, data))
+          }
+          if (typeof entry === 'function') {
+            const ctxValue = context$.value
+            const data = await entry(ctxValue, mapToObject(dataMap) as D)
+
+            dataMap.set(key, data)
+            pureDataMap.set(key, data)
+          }
+        } catch (err) {
+          dataMap.set(key, null)
+          pureDataMap.set(key, null)
+          errorMap.set(key, err)
+
+          if (typeof entry !== 'function') {
+            const { onError, onSuccess } = entry
+            onError && (await invokeUsingHandler<Error>(onError, err))
+            onSuccess && (await invokeUsingHandler(onSuccess, null))
+          }
+        }
+      }
+
+      return [
+        mapToObject<D>(dataMap),
+        mapToObject<D>(pureDataMap),
+        mapToObject<ErrorMap<D>>(errorMap),
+      ]
+    }),
+    filter(([nextData]) => {
+      return Boolean(Object.keys(nextData).length)
+    })
+  )
+
   const updateAsync = async () => {
-    if (!dataDescriptor) return
-
-    const entries = Object.entries(dataDescriptor || {})
-    const dataMap = new Map<string, any>(entries)
-    const pureDataMap = new Map<string, any>(entries)
-    const errorMap = new Map<string, any>()
-
-    nextListeners.next()
-    for (const [key, entry] of entries) {
-      try {
-        if (entry && typeof entry !== 'function' && entry.source) {
-          const { source, modifiers = [], onNext, onSuccess } = entry
-          onNext && (await invokeUsingHandler(onNext))
-
-          const ctxValue = context$.value
-          const pureData = await source(ctxValue, mapToObject(dataMap) as D)
-          const memoizedModifiers = modifiers.map(modifier => memoize(modifier))
-          const data = modify<C, D>(memoizedModifiers, ctxValue, pureData as D)
-
-          dataMap.set(key, data)
-          pureDataMap.set(key, pureData)
-          onSuccess && (await invokeUsingHandler(onSuccess, data))
-        }
-        if (typeof entry === 'function') {
-          const ctxValue = context$.value
-          const result = await entry(ctxValue, mapToObject(dataMap) as D)
-          dataMap.set(key, result)
-          pureDataMap.set(key, result)
-        }
-      } catch (err) {
-        dataMap.set(key, null)
-        pureDataMap.set(key, null)
-        errorMap.set(key, err)
-
-        if (typeof entry !== 'function') {
-          const { onError, onSuccess } = entry
-          onError && (await invokeUsingHandler<Error>(onError, err))
-          onSuccess && (await invokeUsingHandler(onSuccess, null))
-        }
-      }
-    }
-
-    const nextData = mapToObject<D>(dataMap)
-    const nextPureData = mapToObject<D>(pureDataMap)
-    const nextError = mapToObject<ErrorMap<D>>(errorMap)
-
-    if (Object.keys(nextData).length > 0) {
-      updateSubject<D>(pureData$, nextPureData)
-      updateSubject<D>(data$, mapToObject(dataMap))
-      updateSubject<ErrorMap<D>>(error$, nextError)
-    }
-  }
-
-  /**
-   * this function will run after each setContext and dispatch
-   * it will just get pureData and apply midifiers using new context value
-   */
-  const updateJustModifiers = () => {
-    const ctxValue = context$.value
-    const entries = Object.entries(dataDescriptor || {})
-    const dataMap = new Map<string, any>()
-
-    for (const [key, entry] of entries) {
-      if (typeof entry !== 'function' && Array.isArray(entry.modifiers)) {
-        const { modifiers = [] } = entry
-        const pureData = get(pureData$.value, key)
-        const memoizedModifiers = modifiers.map(modifier => memoize(modifier))
-        const data =
-          pureData && modify<C, D>(memoizedModifiers, ctxValue, pureData as D)
-        dataMap.set(key, data)
-      }
-    }
-
-    const nextData = mapToObject(dataMap)
-    if (Object.keys(nextData).length > 0) {
-      updateSubject<D>(data$, mapToObject(dataMap))
-    }
+    const [data, pureData, error] = await dataAsync$.toPromise()
+    data$.next(data as D)
+    pureData$.next(pureData as D)
+    error$.next(error as ErrorMap<D>)
   }
 
   /**
@@ -252,6 +231,31 @@ function createInstance<C = any, D = any>({
 
     if (!type) resource.emit(id, payload)
     if (id && type && id === __id) resource.emit(type, payload)
+  })
+
+  /**
+   * this function will run after each context$ update
+   * it will just get pureData and apply midifiers using new context value
+   */
+  const dataJustModifiers$ = combineLatest(context$, entries$).pipe(
+    skipUntil(nextListeners),
+    switchMap(([ctx, entries]) =>
+      entries.map(([key, entry]) => {
+        const pure = get(pureData$.value, key)
+        const hasModifers = Array.isArray((entry as any).modifiers)
+
+        if (!hasModifers) return [key, pure]
+        const { modifiers = [] } = entry as DataItemObj<C, D>
+        const memoized = modifiers.map(modifier => memoize(modifier))
+        return pure && [key, modify<C, D>(memoized, ctx, pure as D)]
+      })
+    ),
+    filter(Boolean),
+    scan((obj, [key, value]: any) => ({ ...obj, [key]: value }), {})
+  )
+
+  const pureSubs = dataJustModifiers$.subscribe(val => {
+    data$.next(val)
   })
 
   const resource: Resource<C, D> = {
@@ -279,7 +283,9 @@ function createInstance<C = any, D = any>({
       data$.unsubscribe()
       error$.unsubscribe()
       nextListeners.unsubscribe()
+      fetchAsync.unsubscribe()
       broadcastSub.unsubscribe()
+      pureSubs.unsubscribe()
       return resource
     },
 
@@ -297,8 +303,7 @@ function createInstance<C = any, D = any>({
       const next =
         typeof value === 'function' ? value(context) : { ...context, ...value }
 
-      const equal = updateSubject<C>(context$, next)
-      !equal && updateJustModifiers()
+      updateSubject<C>(context$, next)
     },
 
     setData(value): void {

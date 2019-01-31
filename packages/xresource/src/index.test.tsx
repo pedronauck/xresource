@@ -33,10 +33,10 @@ describe('context', () => {
     instance.setContext({ foo: 'bar' })
 
     expect(contextNext).toBeCalledTimes(1)
-    expect(dataNext).toBeCalledTimes(1)
+    expect(dataNext).toBeCalledTimes(0)
     expect(errorNext).not.toBeCalled()
     expect(instance.getContext()).toEqual({ foo: 'bar' })
-    expect(instance.getData()).toEqual({ bar: undefined })
+    expect(instance.getData()).toEqual({})
   })
 
   test('using multiple instance', async () => {
@@ -174,7 +174,7 @@ describe('data', () => {
     expect(startFn).toBeCalledTimes(1)
     expect(startFn).toBeCalledWith(undefined)
     expect(nextFn).toBeCalled()
-    expect(nextFn).toBeCalledTimes(3)
+    expect(nextFn).toBeCalledTimes(2)
     expect(nextFn).toBeCalledWith({ bar: 'foobar' })
     expect(errorFn).toBeCalledWith({})
   })
