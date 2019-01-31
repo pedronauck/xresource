@@ -57,7 +57,7 @@ export type EventMap<C, D> = Record<string, HandlerInvoker<C, D>>
 export interface Factory<C, D, T = any> {
   id?: string
   context?: C
-  data: DataMap<C, D, T>
+  data?: DataMap<C, D, T>
   handlers?: Handlers<C, D>
   on?: EventMap<C, D>
 }
