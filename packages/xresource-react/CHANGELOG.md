@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.1.1](https://github.com/pedronauck/xresource/compare/v0.1.0...v0.1.1) (2019-01-31)
+
+
+### Bug Fixes
+
+* **react:** export Provider ([0850483](https://github.com/pedronauck/xresource/commit/0850483))
+
+
+
+
+
 # [0.1.0](https://github.com/pedronauck/xresource/compare/v0.0.2...v0.1.0) (2019-01-31)
 
 
