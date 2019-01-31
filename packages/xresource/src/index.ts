@@ -8,13 +8,13 @@ export type Updater<C> = (prev: C) => C
 export type Handler<C, D> = (
   resource: Resource<C, D>,
   ...args: any[]
-) => void | Promise<void>
+) => any | Promise<any>
 
 export type Handlers<C, D> = Record<string, Handler<C, D>>
 export type HandlerInvoker<C, D> = string | string[] | Handler<C, D>
 export type PureHandlers = Record<
   string,
-  (...args: any[]) => void | Promise<void>
+  (...args: any[]) => any | Promise<any>
 >
 
 export interface SourceFnParams<C, D, T> {
