@@ -26,6 +26,7 @@ export const TodoList = ({ renderItem, onCreate }) => {
         <Title>Todo List</Title>
         {!loading && (
           <Topbar
+            blocked={ctx.blocked}
             filter={ctx.filter}
             query={ctx.query}
             onCreate={onCreate}

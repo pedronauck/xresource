@@ -28,6 +28,7 @@ export const TodosResource = createResource(() => ({
   context: {
     query: '',
     filter: 'all',
+    blocked: false,
   },
   data: {
     todos: {
@@ -39,8 +40,12 @@ export const TodosResource = createResource(() => ({
     DELETE_ITEM: 'deleteItem',
     COMPLETE_ITEM: 'completeItem',
     CREATE_ITEM: 'createItem',
+    TOGGLE_BLOCKED: 'toggleBlocked',
   },
   handlers: {
+    toggleBlocked: _ => {
+      _.setContext(ctx => ({ blocked: !ctx.blocked }))
+    },
     setFilter: (_, filter) => {
       _.setContext({ filter })
     },

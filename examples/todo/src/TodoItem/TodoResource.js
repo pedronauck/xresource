@@ -35,8 +35,10 @@ export const TodoResource = createResource(item => ({
     },
     completeTodo: async (_, id, completed) => {
       _.setContext({ completing: true })
+      _.broadcast('todos:TOGGLE_BLOCKED')
       await api.updateTodo(id, { completed })
       _.setContext({ completing: false })
+      _.broadcast('todos:TOGGLE_BLOCKED')
       _.broadcast('todos:COMPLETE_ITEM', id)
     },
     deleteTodo: async (_, id) => {
