@@ -17,11 +17,16 @@ export type PureHandlers = Record<
   (...args: any[]) => void | Promise<void>
 >
 
+export interface SourceFnParams<C, D, T> {
+  context: C
+  data: Partial<D>
+  client?: T
+}
+
 export type SourceFn<C, D, T> = (
-  ctx: C,
-  data: Partial<D>,
-  client: T
+  { context, data, client }: SourceFnParams<C, D, T>
 ) => Promise<any> | any
+
 export type Modifier<C, D> = (context: C, current: D) => any
 
 export interface DataItemObj<C, D, T> {
@@ -124,7 +129,7 @@ function updateSubject<T>(subject: BehaviorSubject<T>, next: T): boolean {
 
 function createInstance<C = any, D = any, T = any>(
   factory: Factory<C, D, T>,
-  client: T
+  client?: T
 ): Resource<C, D> {
   const {
     id: __id,
@@ -187,20 +192,29 @@ function createInstance<C = any, D = any, T = any>(
             const { source, modifiers = [], onNext, onSuccess } = entry
             onNext && (await invokeUsingHandler(onNext))
 
-            const ctxValue = context$.value
-            const newData = mapToObject(dataMap) as D
-            const pureData = await source(ctxValue, newData, client)
+            const currentCtx = context$.value
+            const currentData = mapToObject(dataMap) as D
+            const pureData = await source({
+              context: currentCtx,
+              data: currentData,
+              client,
+            })
+
             const memoized = modifiers.map(modifier => memoize(modifier))
-            const data = modify<C, D>(memoized, ctxValue, pureData as D)
+            const data = modify<C, D>(memoized, currentCtx, pureData as D)
 
             dataMap.set(key, data)
             pureDataMap.set(key, pureData)
             onSuccess && (await invokeUsingHandler(onSuccess, data))
           }
           if (typeof entry === 'function') {
-            const ctxValue = context$.value
-            const newData = mapToObject(dataMap) as D
-            const data = await entry(ctxValue, newData, client)
+            const currentCtx = context$.value
+            const currentData = mapToObject(dataMap) as D
+            const data = await entry({
+              context: currentCtx,
+              data: currentData,
+              client,
+            })
 
             dataMap.set(key, data)
             pureDataMap.set(key, data)
@@ -354,7 +368,7 @@ function createInstance<C = any, D = any, T = any>(
 
 export interface ResourceInstance<C, D> {
   with(...args: any[]): ResourceInstance<C, D>
-  create<T>(client: T): Resource<C, D>
+  create<T>(client?: T): Resource<C, D>
 }
 
 export type DefaultContext = Record<string, any>
@@ -370,7 +384,7 @@ export function createResource<C = DefaultContext, D = DefaultData>(
       args$.next(args)
       return instance
     },
-    create<T>(client: T): Resource<C, D> {
+    create<T>(client?: T): Resource<C, D> {
       const resource =
         typeof factory === 'function' ? factory(...args$.value) : factory
       return createInstance<C, D, T>(resource, client)

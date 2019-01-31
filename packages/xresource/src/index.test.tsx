@@ -270,7 +270,7 @@ describe('data', () => {
         data: {
           bar: {
             onNext: 'setFoo',
-            source: ctx => ctx.foo + 'bar',
+            source: ({ context: ctx }) => ctx.foo + 'bar',
           },
         },
         handlers: {
