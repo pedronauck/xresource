@@ -1,2 +1,3 @@
-export { useResource } from './useResource'
 export { Provider } from './Provider'
+export { useClient } from './useClient'
+export { useResource } from './useResource'
