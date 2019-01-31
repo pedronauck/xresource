@@ -67,6 +67,7 @@ export type ResourceFactory<C, D> = Factory<C, D> | FactoryFn<C, D>
 
 export interface Resource<C, D> {
   __id?: string
+  client: any
   handlers: PureHandlers
   context$: BehaviorSubject<C>
   data$: BehaviorSubject<D>
@@ -289,6 +290,7 @@ function createInstance<C = any, D = any, T = any>(
 
   const resource: Resource<C, D> = {
     __id,
+    client,
     context$,
     data$,
     error$,
