@@ -23,7 +23,7 @@ const normalizeMiddleware = createResponseMiddleware((operation, next) => {
 })
 
 describe('axios client', () => {
-  test('simple request', async () => {
+  test.skip('simple request', async () => {
     const client = createClient({
       url: 'https://dog.ceo/api/breeds',
     })
