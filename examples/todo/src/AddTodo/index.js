@@ -1,26 +1,26 @@
 import React, { useState } from 'react'
 import { Flex, Box } from 'rebass'
 import { Button, Drawer, Input, Spin } from 'antd'
-import { broadcast } from 'xresource'
+import { useResource } from '@xresource/react'
 
-import * as api from '../api'
+import { TodoResource } from '../TodoItem/TodoResource'
 
 export const AddTodo = ({ opened, close }) => {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const { ctx, handlers, setContext } = useResource(TodoResource, {
+    readOnMount: false,
+  })
 
   const reset = () => {
-    setSubmitting(false)
+    setContext({ submitting: false })
     close()
     setTitle('')
     setBody('')
   }
 
   const handleSubmit = async () => {
-    setSubmitting(true)
-    const todo = await api.createTodo({ title, body, completed: false })
-    broadcast('todos:CREATE_ITEM', todo)
+    await handlers.createTodo({ title, body, completed: false })
     reset()
   }
 
@@ -29,10 +29,10 @@ export const AddTodo = ({ opened, close }) => {
       width={400}
       title="Creating Todo"
       visible={opened}
-      closable={!submitting}
+      closable={!ctx.submitting}
       onClose={close}
     >
-      {submitting ? (
+      {ctx.submitting ? (
         <Spin />
       ) : (
         <>

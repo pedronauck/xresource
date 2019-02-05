@@ -1,14 +1,4 @@
-import { GraphQLClient } from 'gery'
 import gql from 'gql-tag'
-
-const client = new GraphQLClient({
-  endpoint:
-    'https://api-euwest.graphcms.com/v1/cjqxsbo7x8wsu01dnqo5pyvye/master',
-  headers: {
-    authorization:
-      'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ2ZXJzaW9uIjoxLCJ0b2tlbklkIjoiNDQ2ZjRlZWItMmU2Ni00OGVhLWFhN2ItNTYzMDBmNzdjYzU1In0.WndxPk5pJTRJ6WA5Kk_lxT0wk-o1xAhuf_X4z1HA3nA',
-  },
-})
 
 const GET_TODOS = gql`
   query getTodos {
@@ -58,25 +48,25 @@ const CREATE_TODO = gql`
   }
 `
 
-export const getTodos = async () => {
-  const res = await client.query(GET_TODOS)
-  return res.todoes
+export const getTodos = async ({ client }) => {
+  const { data } = await client.exec(GET_TODOS)
+  return data.todoes
 }
 
-export const getTodo = async id => {
-  const res = await client.query(GET_TODO, { id })
-  return res.todo
+export const getTodo = async (client, id) => {
+  const { data } = await client.exec(GET_TODO, { id })
+  return data.todo
 }
 
-export const createTodo = async data => {
-  const res = await client.query(CREATE_TODO, { data })
-  return res.createTodo
+export const createTodo = async (client, body) => {
+  const { data } = await client.exec(CREATE_TODO, { data: body })
+  return data.createTodo
 }
 
-export const updateTodo = async (id, data) => {
-  await client.query(UPDATE_TODO, { id, data })
+export const updateTodo = async (client, body) => {
+  await client.exec(UPDATE_TODO, body)
 }
 
-export const deleteTodo = async id => {
-  await client.query(DELETE_TODO, { id })
+export const deleteTodo = async (client, body) => {
+  await client.exec(DELETE_TODO, body)
 }
