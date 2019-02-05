@@ -1,6 +1,6 @@
 {
   "name": "@xresource/client-graphql",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -21,7 +21,7 @@
     "tslint": "tslint --project ."
   },
   "dependencies": {
-    "@xresource/client-axios": "^0.2.0",
+    "@xresource/client-axios": "^0.2.1",
     "axios": "^0.18.0"
   },
   "devDependencies": {
