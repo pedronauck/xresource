@@ -221,6 +221,7 @@ function createInstance<C = any, D = any, T = any>(
             pureDataMap.set(key, data)
           }
         } catch (err) {
+          console.error(err)
           dataMap.set(key, null)
           pureDataMap.set(key, null)
           errorMap.set(key, err)
