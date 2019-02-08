@@ -9,7 +9,7 @@ export const AddTodo = ({ opened, close }) => {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const { ctx, handlers, setContext } = useResource(TodoResource, {
-    readOnMount: false,
+    lazy: true,
   })
 
   const reset = () => {

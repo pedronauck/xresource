@@ -18,7 +18,7 @@ it('using a basic resource', async () => {
 
 it('without update on read', async () => {
   const Foo = () => {
-    const { ctx, data } = useResource(BasicResource, { readOnMount: false })
+    const { ctx, data } = useResource(BasicResource, { lazy: false })
     return <div>{ctx.foo + data.bar}</div>
   }
 
