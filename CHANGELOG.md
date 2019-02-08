@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.2.2](https://github.com/pedronauck/xresource/compare/v0.2.1...v0.2.2) (2019-02-08)
+
+
+### Bug Fixes
+
+* **xresource:** console error when happens ([29016a7](https://github.com/pedronauck/xresource/commit/29016a7))
+
+
+### Features
+
+* **react:** add memoize inputs options for hook ([0dfb9bb](https://github.com/pedronauck/xresource/commit/0dfb9bb))
+
+
+
+
+
 ## [0.2.1](https://github.com/pedronauck/xresource/compare/v0.2.0...v0.2.1) (2019-02-05)
 
 **Note:** Version bump only for package xresource
