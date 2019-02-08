@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.2.3](https://github.com/pedronauck/xresource/compare/v0.2.2...v0.2.3) (2019-02-08)
+
+
+### Bug Fixes
+
+* re create resource on input change ([7de14ee](https://github.com/pedronauck/xresource/commit/7de14ee))
+
+
+
+
+
 ## [0.2.2](https://github.com/pedronauck/xresource/compare/v0.2.1...v0.2.2) (2019-02-08)
 
 
