@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react'
+import { useMemo, useState, useEffect, useContext } from 'react'
 import { Resource, ErrorMap, ResourceInstance } from 'xresource'
 
 import { ctx as clientCtx } from './Provider'
@@ -11,25 +11,24 @@ export interface UseResource<C, D> extends Resource<C, D> {
 }
 
 export interface UseResourceOpts<C, D> {
-  readOnMount?: ((resource: Resource<C, D>) => boolean) | boolean
+  lazy?: ((resource: Resource<C, D>) => boolean) | boolean
+  inputs?: any[]
 }
 
 export function useResource<C = any, D = any>(
   instance: ResourceInstance<C, D>,
-  opts: UseResourceOpts<C, D> = { readOnMount: true }
+  opts: UseResourceOpts<C, D> = {}
 ): UseResource<C, D> {
   const client = useContext(clientCtx)
-  const [resource] = useState(() => instance.create(client))
+  const resource = useMemo(() => instance.create(client), opts.inputs || [])
   const { context$, data$, error$, onReadNext, onReadStart } = resource
-  const readOnMount =
-    typeof opts.readOnMount === 'function'
-      ? opts.readOnMount(resource)
-      : Boolean(opts.readOnMount)
+  const lazy =
+    typeof opts.lazy === 'function' ? opts.lazy(resource) : Boolean(opts.lazy)
 
   const [ctx, setCtx] = useState(context$.value)
   const [data, setData] = useState(data$.value)
   const [error, setError] = useState(error$.value)
-  const [loading, setLoading] = useState(readOnMount)
+  const [loading, setLoading] = useState(lazy)
 
   useEffect(() => {
     context$.subscribe(setCtx)
@@ -37,7 +36,7 @@ export function useResource<C = any, D = any>(
     error$.subscribe(setError)
     onReadStart(() => setLoading(true))
     onReadNext(() => setLoading(false))
-    readOnMount && resource.read()
+    !lazy && resource.read()
     return () => {
       resource.stop()
     }
