@@ -19,8 +19,9 @@ export function useResource<C = any, D = any>(
   instance: ResourceInstance<C, D>,
   opts: UseResourceOpts<C, D> = {}
 ): UseResource<C, D> {
+  const inputs = opts.inputs || []
   const client = useContext(clientCtx)
-  const resource = useMemo(() => instance.create(client), opts.inputs || [])
+  const resource = useMemo(() => instance.create(client), inputs)
   const { context$, data$, error$, onReadNext, onReadStart } = resource
   const lazy =
     typeof opts.lazy === 'function' ? opts.lazy(resource) : Boolean(opts.lazy)
@@ -31,16 +32,22 @@ export function useResource<C = any, D = any>(
   const [loading, setLoading] = useState(lazy)
 
   useEffect(() => {
-    context$.subscribe(setCtx)
-    data$.subscribe(setData)
-    error$.subscribe(setError)
-    onReadStart(() => setLoading(true))
-    onReadNext(() => setLoading(false))
+    const ctxSub = context$.subscribe(setCtx)
+    const dataSub = data$.subscribe(setData)
+    const errorSub = error$.subscribe(setError)
+    const startSub = onReadStart(() => setLoading(true))
+    const nextSub = onReadNext(() => setLoading(false))
+
     !lazy && resource.read()
     return () => {
+      ctxSub.unsubscribe()
+      dataSub.unsubscribe()
+      errorSub.unsubscribe()
+      startSub()
+      nextSub()
       resource.stop()
     }
-  }, [])
+  }, inputs)
 
   return {
     ...resource,

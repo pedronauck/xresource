@@ -82,9 +82,9 @@ export interface Resource<C, D> {
   setData(next: Updater<D> | Partial<D>): void
   emit(type: string, value: any): void
   broadcast(type: string, value: any): void
-  onReadStart(listener: NextListener): void
-  onReadError(listener: ErrorListener<D>): void
-  onReadNext(listener: CompleteListener<D>): void
+  onReadStart(listener: NextListener): () => void
+  onReadError(listener: ErrorListener<D>): () => void
+  onReadNext(listener: CompleteListener<D>): () => void
 }
 
 export interface BroadcastPayload {
@@ -311,9 +311,11 @@ function createInstance<C = any, D = any, T = any>(
     },
 
     stop(): Resource<C, D> {
-      context$.unsubscribe()
-      data$.unsubscribe()
-      error$.unsubscribe()
+      context$.complete()
+      data$.complete()
+      error$.complete()
+      nextListeners.complete()
+      fetchAsync.complete()
       nextListeners.unsubscribe()
       fetchAsync.unsubscribe()
       broadcastSub.unsubscribe()
@@ -352,16 +354,19 @@ function createInstance<C = any, D = any, T = any>(
       invokeUsingHandler<typeof value>(select, value)
     },
 
-    onReadStart(listener): void {
-      nextListeners.subscribe(listener)
+    onReadStart(listener): () => void {
+      const sub = nextListeners.subscribe(listener)
+      return () => sub.unsubscribe()
     },
 
-    onReadNext(listener): void {
-      data$.subscribe(listener)
+    onReadNext(listener): () => void {
+      const sub = data$.subscribe(listener)
+      return () => sub.unsubscribe()
     },
 
-    onReadError(listener): void {
-      error$.subscribe(listener)
+    onReadError(listener): () => void {
+      const sub = error$.subscribe(listener)
+      return () => sub.unsubscribe()
     },
   }
 
@@ -370,6 +375,7 @@ function createInstance<C = any, D = any, T = any>(
 }
 
 export interface ResourceInstance<C, D> {
+  args$: BehaviorSubject<any>
   with(...args: any[]): ResourceInstance<C, D>
   create<T>(client?: T): Resource<C, D>
 }
@@ -380,16 +386,18 @@ export type DefaultData = Record<string, any>
 export function createResource<C = DefaultContext, D = DefaultData>(
   factory: ResourceFactory<C, D>
 ): ResourceInstance<C, D> {
-  const args$ = new BehaviorSubject<any>([])
-
   const instance = {
+    args$: new BehaviorSubject<any>([]),
     with(...args: any[]): ResourceInstance<C, D> {
-      args$.next(args)
+      instance.args$.next(args)
       return instance
     },
     create<T>(client?: T): Resource<C, D> {
       const resource =
-        typeof factory === 'function' ? factory(...args$.value) : factory
+        typeof factory === 'function'
+          ? factory(...instance.args$.value)
+          : factory
+
       return createInstance<C, D, T>(resource, client)
     },
   }
