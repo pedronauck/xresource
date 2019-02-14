@@ -1,6 +1,6 @@
 {
   "name": "@xresource/example-todo",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "license": "MIT",
   "scripts": {
     "build": "poi --prod",
@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@xresource/client-graphql": "^0.2.1",
-    "@xresource/react": "^0.2.3",
+    "@xresource/react": "^0.2.4",
     "antd": "^3.12.3",
     "gql-tag": "^1.0.1",
     "lodash": "^4.17.11",

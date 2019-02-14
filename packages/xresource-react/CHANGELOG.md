@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.2.4](https://github.com/pedronauck/xresource/compare/v0.2.3...v0.2.4) (2019-02-14)
+
+
+### Bug Fixes
+
+* **react:** initial loading ([6192135](https://github.com/pedronauck/xresource/commit/6192135))
+
+
+
+
+
 ## [0.2.3](https://github.com/pedronauck/xresource/compare/v0.2.2...v0.2.3) (2019-02-08)
 
 
