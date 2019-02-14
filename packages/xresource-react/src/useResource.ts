@@ -29,7 +29,7 @@ export function useResource<C = any, D = any>(
   const [ctx, setCtx] = useState(context$.value)
   const [data, setData] = useState(data$.value)
   const [error, setError] = useState(error$.value)
-  const [loading, setLoading] = useState(lazy)
+  const [loading, setLoading] = useState(!lazy)
 
   useEffect(() => {
     const ctxSub = context$.subscribe(setCtx)
