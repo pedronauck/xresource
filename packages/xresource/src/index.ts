@@ -150,9 +150,9 @@ function createInstance<C = any, D = any, T = any>(
 
   const setInitial = () => {
     context$.next(initialContext || ({} as C))
+    error$.next({} as ErrorMap<D>)
     pureData$.next({} as D)
     data$.next({} as D)
-    error$.next({} as ErrorMap<D>)
   }
 
   const handlers = reduceHandlers<C, D>(
