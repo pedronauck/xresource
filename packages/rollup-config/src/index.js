@@ -1,9 +1,7 @@
 const { omit, get } = require('lodash')
 const typescript = require('@pedronauck/rollup-plugin-typescript2')
 const babel = require('rollup-plugin-babel')
-const { terser } = require('rollup-plugin-terser')
 
-const isProd = process.env.NODE_ENV === 'production'
 const sizePlugin = require('./plugins/size')
 const copyPlugin = require('./plugins/copy')
 
@@ -15,15 +13,6 @@ const defaultPlugins = outputDir => [
   typescript({
     rollupCommonJSResolveHack: true,
   }),
-  isProd &&
-    terser({
-      compress: {
-        pure_getters: true,
-        unsafe: true,
-        unsafe_comps: true,
-        warnings: false,
-      },
-    }),
   sizePlugin(outputDir),
 ]
 
