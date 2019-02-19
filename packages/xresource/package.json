@@ -1,6 +1,6 @@
 {
   "name": "xresource",
-  "version": "0.2.3",
+  "version": "0.2.6",
   "license": "MIT",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
